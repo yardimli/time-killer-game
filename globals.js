@@ -19,9 +19,6 @@ void main() {
 }
 `;
 
-// --- Shared Constant ---
-const SELECTOR_SCREEN_HEIGHT = 100;
-
 // --- Custom Post-Processing Pipeline ---
 class GlitchPostFxPipeline extends Phaser.Renderer.WebGL.Pipelines.PostFXPipeline {
 	constructor(game) {

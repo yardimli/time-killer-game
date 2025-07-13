@@ -5,29 +5,30 @@ class BoardSetupScene extends Phaser.Scene {
 		this.currentSides = 3;
 		this.hoveredIndex = -1;
 		this.justClickedIndex = -1;
-		this.PIXEL_SCALE = 2;
-		this.SELECTOR_PIXEL_HEIGHT = 40;
-		this.SELECTOR_SCREEN_HEIGHT = 100; // From globals.js
-		this.SLOT_PIXEL_WIDTH = 30;
-		this.NUM_ICONS = 4;
-		this.selectorHitArea = null;
 		
-		// Define the master list of colors available for the balls.
-		this.BALL_COLORS = [
-			'#FF0000', // Red
-			'#FFA500', // Orange
-			'#FFFF00', // Yellow
-			'#00FF00', // Green
-			'#0000FF', // Blue
-			'#4B0082', // Indigo
-			'#EE82EE'  // Violet
-		];
+		// --- MODIFIED SECTION: Configuration updated for vertical layout ---
+		this.PIXEL_SCALE = GAME_CONFIG.Shared.PIXEL_SCALE;
+		// The width of the selector bar in screen pixels.
+		this.SELECTOR_SCREEN_WIDTH = GAME_CONFIG.Shared.SELECTOR_SCREEN_WIDTH;
+		// The width of the selector bar's internal canvas in its own pixels.
+		this.SELECTOR_PIXEL_WIDTH = GAME_CONFIG.BoardSetupScene.SELECTOR_PIXEL_WIDTH;
+		// The height of each icon slot in its own pixels.
+		this.SLOT_PIXEL_HEIGHT = GAME_CONFIG.BoardSetupScene.SLOT_PIXEL_HEIGHT;
+		this.NUM_ICONS = GAME_CONFIG.BoardSetupScene.NUM_ICONS;
+		this.BALL_COLORS = GAME_CONFIG.Shared.BALL_COLORS;
+		// --- END MODIFICATION ---
+		
+		this.selectorHitArea = null;
 	}
 	
 	create() {
 		console.log("BoardSetupScene: create()");
-		this.cameras.main.setViewport(0, 0, this.scale.width, this.SELECTOR_SCREEN_HEIGHT);
-		this.selectorTexture = this.textures.createCanvas('selectorTexture', 1, this.SELECTOR_PIXEL_HEIGHT);
+		// --- MODIFIED SECTION: Viewport set to the left side of the screen ---
+		this.cameras.main.setViewport(0, 0, this.SELECTOR_SCREEN_WIDTH, this.scale.height);
+		// The texture is now tall and thin. Its height will be set dynamically in handleResize.
+		this.selectorTexture = this.textures.createCanvas('selectorTexture', this.SELECTOR_PIXEL_WIDTH, 1);
+		// --- END MODIFICATION ---
+		
 		this.selectorImage = this.add.image(0, 0, 'selectorTexture')
 			.setOrigin(0, 0)
 			.setScale(this.PIXEL_SCALE);
@@ -44,23 +45,28 @@ class BoardSetupScene extends Phaser.Scene {
 	}
 	
 	handleResize(gameSize) {
-		this.cameras.main.setViewport(0, 0, gameSize.width, this.SELECTOR_SCREEN_HEIGHT);
-		const newWidth = gameSize.width / this.PIXEL_SCALE;
-		const newHeight = this.SELECTOR_PIXEL_HEIGHT;
+		// --- MODIFIED SECTION: Viewport and texture resized for a vertical bar ---
+		this.cameras.main.setViewport(0, 0, this.SELECTOR_SCREEN_WIDTH, gameSize.height);
+		const newWidth = this.SELECTOR_PIXEL_WIDTH;
+		const newHeight = gameSize.height / this.PIXEL_SCALE;
 		this.selectorTexture.setSize(newWidth, newHeight);
 		this.selectorHitArea.setSize(newWidth, newHeight);
 		this.selectorImage.setPosition(this.cameras.main.x, this.cameras.main.y);
 		this.drawSelectorBar();
+		// --- END MODIFICATION ---
 	}
 	
 	getIconIndexFromPointer(pointer) {
-		const totalIconsWidth = this.NUM_ICONS * this.SLOT_PIXEL_WIDTH;
-		const startX = (this.selectorTexture.width - totalIconsWidth) / 2;
-		const localX = (pointer.x - this.selectorImage.x) / this.PIXEL_SCALE;
-		if (localX < startX || localX > startX + totalIconsWidth) {
+		// --- MODIFIED SECTION: Logic updated to check Y-axis for vertical layout ---
+		const totalIconsHeight = this.NUM_ICONS * this.SLOT_PIXEL_HEIGHT;
+		const startY = (this.selectorTexture.height - totalIconsHeight) / 2;
+		const localY = (pointer.y - this.selectorImage.y) / this.PIXEL_SCALE;
+		
+		if (localY < startY || localY > startY + totalIconsHeight) {
 			return -1;
 		}
-		return Math.floor((localX - startX) / this.SLOT_PIXEL_WIDTH);
+		return Math.floor((localY - startY) / this.SLOT_PIXEL_HEIGHT);
+		// --- END MODIFICATION ---
 	}
 	
 	handlePointerMove(pointer) {
@@ -98,10 +104,10 @@ class BoardSetupScene extends Phaser.Scene {
 	 * assigns them to goals, and emits an event to other scenes.
 	 */
 	emitBoardConfiguration() {
+		// The master list of colors is now sourced from the centralized config file.
 		const shuffledColors = Phaser.Utils.Array.Shuffle([...this.BALL_COLORS]);
 		const selectedColors = shuffledColors.slice(0, this.currentSides);
 		
-		// --- MODIFICATION: Assign colors to goals ---
 		// Create a mapping of each side (goal) to a specific color.
 		const goals = [];
 		for (let i = 0; i < this.currentSides; i++) {
@@ -110,7 +116,6 @@ class BoardSetupScene extends Phaser.Scene {
 				color: selectedColors[i]
 			});
 		}
-		// --- END MODIFICATION ---
 		
 		this.game.events.emit('boardConfigurationChanged', {
 			sides: this.currentSides,
@@ -123,13 +128,16 @@ class BoardSetupScene extends Phaser.Scene {
 		const ctx = this.selectorTexture.getContext();
 		ctx.clearRect(0, 0, this.selectorTexture.width, this.selectorTexture.height);
 		const iconSize = 10;
-		const totalIconsWidth = this.NUM_ICONS * this.SLOT_PIXEL_WIDTH;
-		const startX = Math.floor((this.selectorTexture.width - totalIconsWidth) / 2);
+		// --- MODIFIED SECTION: Drawing logic updated for a vertical column ---
+		const totalIconsHeight = this.NUM_ICONS * this.SLOT_PIXEL_HEIGHT;
+		const startY = Math.floor((this.selectorTexture.height - totalIconsHeight) / 2);
 		
 		for (let i = 0; i < this.NUM_ICONS; i++) {
 			const sides = i + 3;
-			const cx = startX + i * this.SLOT_PIXEL_WIDTH + (this.SLOT_PIXEL_WIDTH / 2);
-			const cy = this.SELECTOR_PIXEL_HEIGHT / 2;
+			// Center X is now fixed for the vertical bar.
+			const cx = this.SELECTOR_PIXEL_WIDTH / 2;
+			// Y position changes for each icon, creating a column.
+			const cy = startY + i * this.SLOT_PIXEL_HEIGHT + (this.SLOT_PIXEL_HEIGHT / 2);
 			const isSelected = (sides === this.currentSides);
 			const isHovered = (i === this.hoveredIndex);
 			const isClicked = (i === this.justClickedIndex);
@@ -138,6 +146,7 @@ class BoardSetupScene extends Phaser.Scene {
 			ctx.strokeStyle = isSelected ? '#FFFFFF' : '#00FFFF';
 			if (isHovered) ctx.strokeStyle = '#FFFF00';
 			if (isClicked) ctx.fillStyle = '#FFFFFF';
+			// The rectangle is now taller than it is wide.
 			this.drawPixelRect(ctx, cx - 12, cy - 15, 24, 30, isSelected ? 2 : 1);
 			
 			let polyX = cx;
@@ -149,6 +158,7 @@ class BoardSetupScene extends Phaser.Scene {
 			ctx.fillStyle = isClicked ? '#000000' : '#FFFFFF';
 			this.drawPixelPolygon(ctx, polyX, polyY, iconSize, sides);
 		}
+		// --- END MODIFICATION ---
 		this.selectorTexture.update();
 	}
 	

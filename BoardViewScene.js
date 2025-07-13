@@ -2,11 +2,22 @@
 class BoardViewScene extends Phaser.Scene {
 	constructor() {
 		super({key: 'BoardViewScene', active: true});
-		this.BOARD_PIXEL_WIDTH = 400;
-		this.BOARD_PIXEL_HEIGHT = 400;
-		this.PIXEL_SCALE = 2;
-		this.SELECTOR_SCREEN_HEIGHT = 40;
-		this.SCORE_SCREEN_HEIGHT = 60;
+		
+		// --- MODIFIED SECTION: Configuration updated for new layout ---
+		const config = GAME_CONFIG.BoardViewScene;
+		const sharedConfig = GAME_CONFIG.Shared;
+		
+		this.BOARD_PIXEL_WIDTH = config.BOARD_PIXEL_WIDTH;
+		this.BOARD_PIXEL_HEIGHT = config.BOARD_PIXEL_HEIGHT;
+		this.PIXEL_SCALE = sharedConfig.PIXEL_SCALE;
+		this.SELECTOR_SCREEN_WIDTH = sharedConfig.SELECTOR_SCREEN_WIDTH;
+		this.SCORE_SCREEN_HEIGHT = sharedConfig.SCORE_SCREEN_HEIGHT;
+		this.backgroundColor = config.backgroundColor;
+		this.debugDraw = config.debugDraw;
+		this.glitchConfig = config.glitchConfig;
+		this.goalConfig = config.goalConfig;
+		// --- END MODIFICATION ---
+		
 		this.borderPixels = [];
 		this.currentSides = 3;
 		this.goals = [];
@@ -16,33 +27,26 @@ class BoardViewScene extends Phaser.Scene {
 		
 		this.glitchPipeline = null;
 		this.debugGraphics = null;
-		this.debugDraw = false; // Set to true to enable debug drawing of the playAreaPolygon and goal sensors.
 		this.shaderGlitches = [];
 		this.activeBorderGlitches = [];
 		this.whiteColor = Phaser.Display.Color.ValueToColor('#FFFFFF');
-		this.glitchConfig = {
-			stretch: {minSize: 0.4, maxSize: 1.0, minDuration: 50, maxDuration: 500, minDelay: 400, maxDelay: 2500},
-			border: {
-				minLength: 15,
-				maxLength: 150,
-				minDuration: 300,
-				maxDuration: 1500,
-				minDelay: 100,
-				maxDelay: 500,
-				color: '#555555'
-			}
-		};
-		this.goalConfig = {width: 100, depth: 60, chamfer: 8, dashLength: 3, gapLength: 3};
+		
+		// NEW: Properties to hold references to the glitch timers.
+		this.stretchGlitchTimer = null;
+		this.borderGlitchTimer = null;
 	}
 	
 	create() {
 		console.log('BoardViewScene: create()');
 		this.cameras.main.setViewport(
+			this.SELECTOR_SCREEN_WIDTH,
 			0,
-			this.SELECTOR_SCREEN_HEIGHT,
-			this.scale.width,
-			this.scale.height - this.SELECTOR_SCREEN_HEIGHT - this.SCORE_SCREEN_HEIGHT
+			this.scale.width - this.SELECTOR_SCREEN_WIDTH,
+			this.scale.height - this.SCORE_SCREEN_HEIGHT
 		);
+		
+		this.cameras.main.setBackgroundColor(this.backgroundColor);
+		
 		this.cameras.main.setPostPipeline('Glitch');
 		this.glitchPipeline = this.cameras.main.getPostPipeline('Glitch');
 		this.boardTexture = this.textures.createCanvas('boardTexture', this.BOARD_PIXEL_WIDTH, this.BOARD_PIXEL_HEIGHT);
@@ -53,16 +57,45 @@ class BoardViewScene extends Phaser.Scene {
 		).setScale(this.PIXEL_SCALE).setInteractive();
 		this.debugGraphics = this.add.graphics();
 		
-		this.game.events.on('boardConfigurationChanged', (config) => {
-			this.currentSides = config.sides;
-			this.goals = config.goals;
-			this.drawBoardShape();
-		}, this);
+		// MODIFIED: The event listener now calls a dedicated handler function for better organization.
+		this.game.events.on('boardConfigurationChanged', this.handleBoardConfigurationChanged, this);
 		
 		this.scale.on('resize', this.handleResize, this);
 		this.scheduleNextStretchGlitch();
 		this.scheduleNextBorderGlitch();
 		this.scene.launch('BallScene');
+	}
+	
+	/**
+	 * NEW: Handles changes to the board configuration.
+	 * This function clears all active and pending glitches before redrawing the board.
+	 * @param {object} config - The new board configuration object.
+	 */
+	handleBoardConfigurationChanged(config) {
+		// 1. Clear all active glitch data arrays.
+		this.shaderGlitches = [];
+		this.activeBorderGlitches = [];
+		
+		// 2. Cancel any scheduled timers that would create new glitches.
+		if (this.stretchGlitchTimer) {
+			this.stretchGlitchTimer.remove();
+			this.stretchGlitchTimer = null;
+		}
+		if (this.borderGlitchTimer) {
+			this.borderGlitchTimer.remove();
+			this.borderGlitchTimer = null;
+		}
+		
+		// 3. Update the board properties.
+		this.currentSides = config.sides;
+		this.goals = config.goals;
+		
+		// 4. Redraw the board with the new configuration.
+		this.drawBoardShape();
+		
+		// 5. Reschedule the glitch effects for the new board.
+		this.scheduleNextStretchGlitch();
+		this.scheduleNextBorderGlitch();
 	}
 	
 	update(time, delta) {
@@ -78,18 +111,15 @@ class BoardViewScene extends Phaser.Scene {
 	drawDebug() {
 		this.debugGraphics.clear();
 		if (this.debugDraw && this.playAreaPolygon) {
-			// Draw the main play area polygon in red.
+			this.debugGraphics.lineStyle(2, 0x00ff00, 0.7);
+			this.goalSensors.forEach(sensor => {
+				this.debugGraphics.strokePoints(sensor.vertices, true);
+			});
+			
 			this.debugGraphics.lineStyle(2, 0xff0000, 0.7);
 			this.debugGraphics.strokePoints(this.playAreaPolygon.points, true);
 			
-			// --- Draw the goal sensor areas ---
-			// Set a new style to differentiate goals from the main boundary.
-			this.debugGraphics.lineStyle(2, 0x00ff00, 0.7); // Green for goals
-			this.goalSensors.forEach(sensor => {
-				// The 'vertices' property of a Matter body contains the world-space points
-				// of its shape, which we can directly draw.
-				this.debugGraphics.strokePoints(sensor.vertices, true);
-			});
+			
 		}
 	}
 	
@@ -133,7 +163,8 @@ class BoardViewScene extends Phaser.Scene {
 	scheduleNextStretchGlitch() {
 		const config = this.glitchConfig.stretch;
 		const delay = Phaser.Math.Between(config.minDelay, config.maxDelay);
-		this.time.delayedCall(delay, this.triggerNewStretchGlitch, [], this);
+		// MODIFIED: Store a reference to the timer so it can be cancelled.
+		this.stretchGlitchTimer = this.time.delayedCall(delay, this.triggerNewStretchGlitch, [], this);
 	}
 	
 	triggerNewStretchGlitch() {
@@ -149,7 +180,8 @@ class BoardViewScene extends Phaser.Scene {
 	scheduleNextBorderGlitch() {
 		const config = this.glitchConfig.border;
 		const delay = Phaser.Math.Between(config.minDelay, config.maxDelay);
-		this.time.delayedCall(delay, this.triggerBorderGlitch, [], this);
+		// MODIFIED: Store a reference to the timer so it can be cancelled.
+		this.borderGlitchTimer = this.time.delayedCall(delay, this.triggerBorderGlitch, [], this);
 	}
 	
 	triggerBorderGlitch() {
@@ -211,10 +243,10 @@ class BoardViewScene extends Phaser.Scene {
 	
 	handleResize(gameSize) {
 		this.cameras.main.setViewport(
+			this.SELECTOR_SCREEN_WIDTH,
 			0,
-			this.SELECTOR_SCREEN_HEIGHT,
-			gameSize.width,
-			gameSize.height - this.SELECTOR_SCREEN_HEIGHT - this.SCORE_SCREEN_HEIGHT
+			gameSize.width - this.SELECTOR_SCREEN_WIDTH,
+			gameSize.height - this.SCORE_SCREEN_HEIGHT
 		);
 		this.boardImage.setPosition(this.cameras.main.centerX, this.cameras.main.centerY);
 		this.drawBoardShape();

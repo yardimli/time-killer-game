@@ -11,12 +11,15 @@ const config = {
 		default: 'matter',
 		matter: {
 			gravity: { y: 0 },
-			debug: false // Shows Matter.js physics bodies, vectors, and collisions.
+			debug: true // Shows Matter.js physics bodies, vectors, and collisions.
 		}
 	},
 	pixelArt: true,
 	scene: [BoardSetupScene, BoardViewScene, BallScene, ScoreScene],
 	render: {
+		// MODIFIED: Make the main game canvas transparent.
+		// This allows the background color set on individual scene cameras to show through.
+		transparent: true,
 		pipeline: {
 			'Glitch': GlitchPostFxPipeline
 		}
