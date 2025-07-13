@@ -71,9 +71,7 @@ class BallScene extends Phaser.Scene {
 			
 			if (playArea && Phaser.Geom.Polygon.Contains(playArea, pointer.x, pointer.y)) {
 				// --- VALID DROP ---
-				// --- MODIFICATION: Use a neutral sound for dropping back in the arena ---
 				this.sound.play('drop', { volume: 0.6 });
-				// --- END MODIFICATION ---
 				// Make the ball dynamic again.
 				gameObject.setStatic(false);
 				// Apply velocity from the drag release.
@@ -120,8 +118,6 @@ class BallScene extends Phaser.Scene {
 				}
 			}
 		});
-		// --- END MODIFICATION ---
-		
 		
 		this.scale.on('resize', (gameSize) => {
 			this.cameras.main.setViewport(
@@ -212,10 +208,7 @@ class BallScene extends Phaser.Scene {
 			// --- END MODIFICATION ---
 		});
 		this.balls.add(ball);
-		
-		// --- MODIFICATION: Attach color data directly to the ball GameObject ---
 		ball.color = ballColor;
-		// --- END MODIFICATION ---
 		
 		ball.setScale(this.ballConfig.initialSize);
 		ball.setOrigin(0.5, 0.5);
@@ -311,12 +304,7 @@ class BallScene extends Phaser.Scene {
 	
 	fadeAndDestroyBall(ball) {
 		if (!ball.active) return;
-		
-		// --- MODIFICATION: Prevent multiple destructions ---
-		// Set the ball to inactive immediately to avoid race conditions
-		// with collision events or timers.
 		ball.setActive(false);
-		// --- END MODIFICATION ---
 		
 		this.tweens.add({
 			targets: ball,

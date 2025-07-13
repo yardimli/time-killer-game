@@ -5,24 +5,19 @@ class BoardViewScene extends Phaser.Scene {
 		this.BOARD_PIXEL_WIDTH = 400;
 		this.BOARD_PIXEL_HEIGHT = 400;
 		this.PIXEL_SCALE = 2;
-		// --- MODIFICATION: Define heights for UI scenes ---
-		// These would typically come from a global config file.
 		this.SELECTOR_SCREEN_HEIGHT = 40;
 		this.SCORE_SCREEN_HEIGHT = 60;
-		// --- END MODIFICATION ---
 		this.borderPixels = [];
 		this.currentSides = 3;
-		// --- MODIFICATION: Add properties for goals ---
 		this.goals = [];
-		this.goalSensors = []; // To hold the Matter.js sensor bodies
-		// --- END MODIFICATION ---
+		this.goalSensors = [];
 		this.playArea = null;
 		this.playAreaPolygon = null;
 		
 		this.isMapView = false;
 		this.glitchPipeline = null;
 		this.debugGraphics = null;
-		this.debugDraw = true; // Set to true to enable debug drawing of the playAreaPolygon.
+		this.debugDraw = true; // Set to true to enable debug drawing of the playAreaPolygon and goal sensors.
 		this.shaderGlitches = [];
 		this.activeBorderGlitches = [];
 		this.whiteColor = Phaser.Display.Color.ValueToColor('#FFFFFF');
@@ -30,19 +25,17 @@ class BoardViewScene extends Phaser.Scene {
 			stretch: { minSize: 0.4, maxSize: 1.0, minDuration: 50, maxDuration: 500, minDelay: 400, maxDelay: 2500 },
 			border: { minLength: 15, maxLength: 150, minDuration: 300, maxDuration: 1500, minDelay: 100, maxDelay: 500, color: '#555555' }
 		};
-		this.goalConfig = { width: 100, depth: 30, chamfer: 8, dashLength: 3, gapLength: 3 };
+		this.goalConfig = { width: 100, depth: 60, chamfer: 8, dashLength: 3, gapLength: 3 };
 	}
 	
 	create() {
 		console.log('BoardViewScene: create()');
-		// --- MODIFICATION: Adjust viewport for ScoreScene ---
 		this.cameras.main.setViewport(
 			0,
 			this.SELECTOR_SCREEN_HEIGHT,
 			this.scale.width,
 			this.scale.height - this.SELECTOR_SCREEN_HEIGHT - this.SCORE_SCREEN_HEIGHT
 		);
-		// --- END MODIFICATION ---
 		this.cameras.main.setPostPipeline('Glitch');
 		this.glitchPipeline = this.cameras.main.getPostPipeline('Glitch');
 		this.boardTexture = this.textures.createCanvas('boardTexture', this.BOARD_PIXEL_WIDTH, this.BOARD_PIXEL_HEIGHT);
@@ -55,9 +48,7 @@ class BoardViewScene extends Phaser.Scene {
 		
 		this.game.events.on('boardConfigurationChanged', (config) => {
 			this.currentSides = config.sides;
-			// --- MODIFICATION: Store goal configuration ---
 			this.goals = config.goals;
-			// --- END MODIFICATION ---
 			this.drawBoardShape();
 		}, this);
 		
@@ -79,8 +70,19 @@ class BoardViewScene extends Phaser.Scene {
 	drawDebug() {
 		this.debugGraphics.clear();
 		if (this.debugDraw && this.playAreaPolygon) {
+			// Draw the main play area polygon in red.
 			this.debugGraphics.lineStyle(2, 0xff0000, 0.7);
 			this.debugGraphics.strokePoints(this.playAreaPolygon.points, true);
+			
+			// --- MODIFICATION: Draw the goal sensor areas ---
+			// Set a new style to differentiate goals from the main boundary.
+			this.debugGraphics.lineStyle(2, 0x00ff00, 0.7); // Green for goals
+			this.goalSensors.forEach(sensor => {
+				// The 'vertices' property of a Matter body contains the world-space points
+				// of its shape, which we can directly draw.
+				this.debugGraphics.strokePoints(sensor.vertices, true);
+			});
+			// --- END MODIFICATION ---
 		}
 	}
 	
@@ -97,10 +99,8 @@ class BoardViewScene extends Phaser.Scene {
 	}
 	
 	drawBoardShape() {
-		// --- MODIFICATION: Clear old goal sensors before redrawing ---
 		this.goalSensors.forEach(sensor => this.matter.world.remove(sensor));
 		this.goalSensors = [];
-		// --- END MODIFICATION ---
 		
 		this.borderPixels = [];
 		const ctx = this.boardTexture.getContext();
@@ -129,9 +129,7 @@ class BoardViewScene extends Phaser.Scene {
 			}
 			this.playArea = { center: worldCenter, vertices: localVertices };
 			this.playAreaPolygon = new Phaser.Geom.Polygon(worldVertices);
-			// --- MODIFICATION: Create physical sensors for goals ---
 			this.createGoalSensors(centerX, centerY, radius, worldCenter);
-			// --- END MODIFICATION ---
 		}
 		
 		this.drawArena(ctx, centerX, centerY, radius, this.currentSides, '#FFFFFF', this.borderPixels);
@@ -161,7 +159,7 @@ class BoardViewScene extends Phaser.Scene {
 	}
 	
 	triggerBorderGlitch() {
-		this.scheduleNextBorderGlitch(); // Keep the loop going
+		this.scheduleNextBorderGlitch();
 		
 		if (this.isMapView || this.borderPixels.length === 0) return;
 		
@@ -223,14 +221,12 @@ class BoardViewScene extends Phaser.Scene {
 		if (this.isMapView) {
 			this.cameras.main.setViewport(0, 0, gameSize.width, gameSize.height);
 		} else {
-			// --- MODIFICATION: Adjust viewport for ScoreScene ---
 			this.cameras.main.setViewport(
 				0,
 				this.SELECTOR_SCREEN_HEIGHT,
 				gameSize.width,
 				gameSize.height - this.SELECTOR_SCREEN_HEIGHT - this.SCORE_SCREEN_HEIGHT
 			);
-			// --- END MODIFICATION ---
 		}
 		this.boardImage.setPosition(this.cameras.main.centerX, this.cameras.main.centerY);
 		this.drawBoardShape();
@@ -250,10 +246,8 @@ class BoardViewScene extends Phaser.Scene {
 		}
 		
 		for (let i = 0; i < sides; i++) {
-			// --- MODIFICATION: Get the color for the current goal ---
 			const goalInfo = this.goals.find(g => g.side === i);
 			const goalColor = goalInfo ? goalInfo.color : color;
-			// --- END MODIFICATION ---
 			
 			const p1 = points[i];
 			const p2 = points[(i + 1) % sides];
@@ -286,7 +280,6 @@ class BoardViewScene extends Phaser.Scene {
 				y: Math.round(midY + sideVecY * (goalWidth / 2))
 			};
 			
-			// Draw solid lines with default color
 			ctx.fillStyle = color;
 			this.drawPixelLine(ctx, p1.x, p1.y, post1.x, post1.y, pixelStore);
 			this.drawPixelLine(ctx, post2.x, post2.y, p2.x, p2.y, pixelStore);
@@ -300,20 +293,16 @@ class BoardViewScene extends Phaser.Scene {
 				y: Math.round(post2.y + normalY * goalDepth - sideVecY * chamfer)
 			};
 			
-			// --- MODIFICATION: Draw dashed goal lines with the assigned goal color ---
 			ctx.fillStyle = goalColor;
 			this.drawDashedPixelLine(ctx, post1.x, post1.y, back1.x, back1.y, dashLength, gapLength, pixelStore);
 			this.drawDashedPixelLine(ctx, back1.x, back1.y, back2.x, back2.y, dashLength, gapLength, pixelStore);
 			this.drawDashedPixelLine(ctx, back2.x, back2.y, post2.x, post2.y, dashLength, gapLength, pixelStore);
-			// --- END MODIFICATION ---
 		}
 	}
 	
-	// --- NEW METHOD: Create Matter.js sensors for goals ---
 	createGoalSensors(cx, cy, radius, worldCenter) {
 		const { width: goalWidth, depth: goalDepth } = this.goalConfig;
 		
-		// Generate vertex points on the canvas, just like in drawArena
 		const points = [];
 		for (let i = 0; i < this.currentSides; i++) {
 			const angle = (i / this.currentSides) * Math.PI * 2 - Math.PI / 2;
@@ -330,11 +319,9 @@ class BoardViewScene extends Phaser.Scene {
 			const p1 = points[i];
 			const p2 = points[(i + 1) % this.currentSides];
 			
-			// Midpoint of the side on the canvas
 			const midX = (p1.x + p2.x) / 2;
 			const midY = (p1.y + p2.y) / 2;
 			
-			// Normal vector (from center to midpoint)
 			let normalX = midX - cx;
 			let normalY = midY - cy;
 			const normalLen = Math.sqrt(normalX * normalX + normalY * normalY);
@@ -343,38 +330,32 @@ class BoardViewScene extends Phaser.Scene {
 				normalY /= normalLen;
 			}
 			
-			// Center of the goal area on the canvas (pushed back by half the depth)
 			const goalCenterX_canvas = midX + normalX * (goalDepth / 2);
 			const goalCenterY_canvas = midY + normalY * (goalDepth / 2);
 			
-			// Convert canvas coordinates to world coordinates for the Matter body
 			const goalCenterX_world = worldCenter.x + (goalCenterX_canvas - cx) * this.PIXEL_SCALE;
 			const goalCenterY_world = worldCenter.y + (goalCenterY_canvas - cy) * this.PIXEL_SCALE;
 			
-			// The rotation of the goal is the angle of the side
 			const sideAngle = Phaser.Math.Angle.Between(p1.x, p1.y, p2.x, p2.y);
 			
-			// Create the sensor body
 			const sensor = this.matter.add.rectangle(
 				goalCenterX_world,
 				goalCenterY_world,
 				goalWidth * this.PIXEL_SCALE,
 				goalDepth * this.PIXEL_SCALE,
 				{
-					isSensor: true, // Detects collisions but doesn't cause a physical response
+					isSensor: true,
 					isStatic: true,
-					label: 'goal', // Label for easy identification in collision events
-					angle: sideAngle // Set rotation during creation
+					label: 'goal',
+					angle: sideAngle
 				}
 			);
 			
-			// Attach the goal's color information to the body for the collision check
 			sensor.color = goalInfo.color;
 			
 			this.goalSensors.push(sensor);
 		}
 	}
-	// --- END NEW METHOD ---
 	
 	drawPixelLine(ctx, x0, y0, x1, y1, pixelStore) {
 		const dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
