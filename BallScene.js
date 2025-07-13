@@ -22,27 +22,18 @@ class BallScene extends Phaser.Scene {
 		this.walls = null;
 	}
 	
-	// --- MODIFIED METHOD: Preload audio assets ---
-	// This function is called by Phaser before the scene's create method is run.
-	// It's the standard place to load all assets needed for the scene.
 	preload() {
 		console.log('BallScene: preload()');
-		// Load a sound for the initial drop and a few for bouncing.
-		// Using multiple bounce sounds adds variety and makes the simulation feel more alive.
-		// You will need to provide these audio files in the specified path (e.g., 'assets/audio/').
+
 		this.load.audio('drop', 'assets/audio/DSGNBass_Smooth Sub Drop Bass Downer.wav');
 		this.load.audio('bounce1', 'assets/audio/basketball_bounce_single_3.wav');
 		this.load.audio('bounce2', 'assets/audio/basketball_bounce_single_5.wav');
 		this.load.audio('bounce3', 'assets/audio/Vintage Bounce.wav');
 		
-		// --- NEW AUDIO ASSETS ---
-		// Load sounds for user interaction: clicking, valid drop, and invalid drop.
 		this.load.audio('click', 'assets/audio/Item Pick Up.wav');
 		this.load.audio('drop_valid', 'assets/audio/Drop Game Potion.wav');
 		this.load.audio('drop_invalid', 'assets/audio/Hit Item Dropped 2.wav');
-		// --- END NEW AUDIO ASSETS ---
 	}
-	// --- END MODIFIED METHOD ---
 	
 	create() {
 		console.log('BallScene: create()');
@@ -66,22 +57,18 @@ class BallScene extends Phaser.Scene {
 			this.resetBalls();
 		}, this);
 		
-		// --- MODIFICATION: Updated drag event handlers for sound and logic ---
 		this.input.on('drag', (pointer, gameObject, dragX, dragY) => { gameObject.setPosition(dragX, dragY); });
 		
 		this.input.on('dragstart', (pointer, gameObject) => {
-			// Play a sound when the user starts dragging a ball.
 			this.sound.play('click', { volume: 0.5 });
 			gameObject.setStatic(true);
 		});
 		
 		this.input.on('dragend', (pointer, gameObject) => {
-			// Check if the ball was dropped inside the valid play area polygon.
 			const playArea = this.boardViewScene.playAreaPolygon;
 			
 			if (playArea && Phaser.Geom.Polygon.Contains(playArea, pointer.x, pointer.y)) {
 				// --- VALID DROP ---
-				// Play a success sound.
 				this.sound.play('drop_valid', { volume: 0.6 });
 				// Make the ball dynamic again.
 				gameObject.setStatic(false);
@@ -89,16 +76,14 @@ class BallScene extends Phaser.Scene {
 				gameObject.setVelocity(pointer.velocity.x / 5, pointer.velocity.y / 5);
 			} else {
 				// --- INVALID DROP ---
-				// Play an error sound.
 				this.sound.play('drop_invalid', { volume: 0.6 });
-				// If a ball is dropped outside the area, fade it out and trigger a respawn.
-				// We must check if the ball is active to prevent multiple destroy calls.
+
 				if (gameObject.active) {
 					this.fadeAndDestroyBall(gameObject);
 				}
 			}
 		});
-		// --- END MODIFICATION ---
+
 		
 		this.scale.on('resize', (gameSize) => {
 			this.cameras.main.setViewport(
@@ -114,10 +99,6 @@ class BallScene extends Phaser.Scene {
 		this.balls.getChildren().forEach(ball => {
 			if (!ball.body || ball.isStatic()) return;
 			
-			// To create an "organic" feel, we apply a tiny, random force infrequently.
-			// The threshold is used as a probability gate: this check will pass on average
-			// 1% of the time (since Math.random() > 0.99 is a rare event).
-			// The force is so small that its effect is only noticeable on slow or stationary balls.
 			if (Math.random() > this.ballConfig.organicMoveThreshold) {
 				const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
 				const force = new Phaser.Math.Vector2(
@@ -212,11 +193,7 @@ class BallScene extends Phaser.Scene {
 			duration: this.ballConfig.dropDuration,
 			ease: 'Bounce.easeOut',
 			onStart: () => {
-				// --- MODIFICATION: Play drop sound ---
-				// Play a sound effect for the initial drop, timed with the bounce animation.
 				this.sound.play('drop', { volume: 0.7 });
-				// --- END MODIFICATION ---
-				
 			},
 			onComplete: () => {
 				if (!ball.active) return;
@@ -237,8 +214,6 @@ class BallScene extends Phaser.Scene {
 			}
 		});
 	}
-	
-	// --- No changes to the functions below this line ---
 	
 	createBallTextures() {
 		this.ballConfig.colors.forEach((color, index) => {

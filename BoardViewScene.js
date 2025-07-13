@@ -8,13 +8,9 @@ class BoardViewScene extends Phaser.Scene {
 		this.SELECTOR_SCREEN_HEIGHT = SELECTOR_SCREEN_HEIGHT - 80; // From globals.js
 		this.borderPixels = [];
 		this.currentSides = 3;
-		// --- MODIFICATION START ---
-		// This will hold the geometry for the physics engine.
-		// It contains the world-space center and local-space vertices.
 		this.playArea = null;
-		// This still holds the world-space polygon for ball spawning.
 		this.playAreaPolygon = null;
-		// --- MODIFICATION END ---
+
 		this.isMapView = false;
 		this.glitchPipeline = null;
 		this.debugGraphics = null;
@@ -41,10 +37,12 @@ class BoardViewScene extends Phaser.Scene {
 			'boardTexture'
 		).setScale(this.PIXEL_SCALE).setInteractive();
 		this.debugGraphics = this.add.graphics();
+		
 		this.game.events.on('boardConfigurationChanged', (config) => {
 			this.currentSides = config.sides;
 			this.drawBoardShape();
 		}, this);
+		
 		this.boardImage.on('pointerdown', this.toggleMapView, this);
 		this.scale.on('resize', this.handleResize, this);
 		this.scheduleNextStretchGlitch();
@@ -72,10 +70,8 @@ class BoardViewScene extends Phaser.Scene {
 		this.isMapView = !this.isMapView;
 		if (this.isMapView) {
 			this.activeBorderGlitches = [];
-			// --- MODIFICATION: Clear both geometry objects in map view ---
 			this.playAreaPolygon = null;
 			this.playArea = null;
-			// --- MODIFICATION END ---
 		}
 		this.game.events.emit('toggleMapView', this.isMapView);
 		this.handleResize({ width: this.scale.width, height: this.scale.height });
@@ -89,8 +85,7 @@ class BoardViewScene extends Phaser.Scene {
 		const centerX = this.BOARD_PIXEL_WIDTH / 2;
 		const centerY = this.BOARD_PIXEL_HEIGHT / 2;
 		const radius = this.isMapView ? this.BOARD_PIXEL_WIDTH / 2 - 5 : this.BOARD_PIXEL_WIDTH / 2 - 20;
-		
-		// --- MODIFICATION: Generate both local and world vertices ---
+
 		if (!this.isMapView) {
 			const worldVertices = [];
 			const localVertices = [];
@@ -118,17 +113,11 @@ class BoardViewScene extends Phaser.Scene {
 			// Store the world-space polygon for ball spawning
 			this.playAreaPolygon = new Phaser.Geom.Polygon(worldVertices);
 		}
-		// --- MODIFICATION END ---
 		
 		this.drawArena(ctx, centerX, centerY, radius, this.currentSides, '#FFFFFF', this.borderPixels);
 		this.boardTexture.update();
 	}
 	
-	drawArena(ctx, cx, cy, radius, sides, color = '#FFFFFF', pixelStore = null) { /* ... unchanged ... */ }
-	drawPixelLine(ctx, x0, y0, x1, y1, pixelStore) { /* ... unchanged ... */ }
-	drawDashedPixelLine(ctx, x0, y0, x1, y1, dashLength, gapLength, pixelStore) { /* ... unchanged ... */ }
-	
-	// --- Unchanged methods from here down ---
 	scheduleNextStretchGlitch() {
 		const config = this.glitchConfig.stretch;
 		const delay = Phaser.Math.Between(config.minDelay, config.maxDelay);
