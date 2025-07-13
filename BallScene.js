@@ -5,7 +5,7 @@ class BallScene extends Phaser.Scene {
 		this.ballConfig = {
 			colors: [],
 			maxBalls: 3,
-			lifespan: 20000,
+			lifespan: 120000,
 			fadeDuration: 1500,
 			respawnDelay: 1000,
 			initialSize: 0.1,
@@ -66,55 +66,63 @@ class BallScene extends Phaser.Scene {
 			gameObject.setStatic(true);
 		});
 		
+		// --- MODIFIED SECTION: Updated dragend logic ---
 		this.input.on('dragend', (pointer, gameObject) => {
 			const playArea = this.boardViewScene.playAreaPolygon;
+			const goalSensors = this.boardViewScene.goalSensors;
 			
-			if (playArea && Phaser.Geom.Polygon.Contains(playArea, pointer.x, pointer.y)) {
+			// A drop is valid if it's inside the main play area polygon...
+			let isValidDrop = playArea && Phaser.Geom.Polygon.Contains(playArea, pointer.x, pointer.y);
+			let isGoalDrop = false;
+			
+			// ...or if it's inside one of the goal sensor areas.
+			if (!isValidDrop && goalSensors) {
+				for (const sensor of goalSensors) {
+					// Matter bodies have a 'vertices' property with world-space coordinates.
+					// We can create a temporary polygon from these to check for containment.
+					const sensorPolygon = new Phaser.Geom.Polygon(sensor.vertices);
+					if (Phaser.Geom.Polygon.Contains(sensorPolygon, pointer.x, pointer.y)) {
+						isValidDrop = true;
+						isGoalDrop = true;
+						console.log('Valid drop inside goal sensor:', sensor);
+						
+						const ball = gameObject;
+						
+						// Ensure the ball is a valid, active game object before processing
+						if (ball && ball.active) {
+							// Check if the ball's color matches the goal's assigned color
+							if (ball.color === sensor.color) {
+								// --- CORRECT GOAL ---
+								this.sound.play('drop_valid', { volume: 0.6 });
+								this.game.events.emit('scorePoint', { color: ball.color });
+								this.fadeAndDestroyBall(ball);
+							} else {
+								// --- WRONG GOAL ---
+								this.sound.play('drop_invalid', { volume: 0.6 });
+								this.fadeAndDestroyBall(ball);
+							}
+						}
+						
+						break; // Found a valid drop location, no need to check other goals.
+					}
+				}
+			}
+			
+			if (isValidDrop && !isGoalDrop) {
 				// --- VALID DROP ---
 				this.sound.play('drop', { volume: 0.6 });
-				// Make the ball dynamic again.
+				// Make the ball dynamic again so it can collide with the goal sensor.
 				gameObject.setStatic(false);
 				// Apply velocity from the drag release.
 				gameObject.setVelocity(pointer.velocity.x / 5, pointer.velocity.y / 5);
-			} else {
+			} else
+			if (!isValidDrop && !isGoalDrop)
+			{
 				// --- INVALID DROP ---
 				this.sound.play('drop_invalid', { volume: 0.6 });
 				
 				if (gameObject.active) {
 					this.fadeAndDestroyBall(gameObject);
-				}
-			}
-		});
-		
-		// --- MODIFICATION: Setup collision detection for scoring ---
-		this.matter.world.on('collisionstart', (event, bodyA, bodyB) => {
-			let ballBody, goalBody;
-			
-			// Identify which body is the ball and which is the goal
-			if (bodyA.label === 'ball' && bodyB.label === 'goal') {
-				ballBody = bodyA;
-				goalBody = bodyB;
-			} else if (bodyB.label === 'ball' && bodyA.label === 'goal') {
-				ballBody = bodyB;
-				goalBody = bodyA;
-			} else {
-				return; // Not a ball-goal collision, so we don't care.
-			}
-			
-			const ball = ballBody.gameObject;
-			
-			// Ensure the ball is a valid, active game object before processing
-			if (ball && ball.active) {
-				// Check if the ball's color matches the goal's assigned color
-				if (ball.color === goalBody.color) {
-					// --- CORRECT GOAL ---
-					this.sound.play('drop_valid', { volume: 0.6 });
-					this.game.events.emit('scorePoint', { color: ball.color });
-					this.fadeAndDestroyBall(ball);
-				} else {
-					// --- WRONG GOAL ---
-					this.sound.play('drop_invalid', { volume: 0.6 });
-					this.fadeAndDestroyBall(ball);
 				}
 			}
 		});
@@ -171,12 +179,12 @@ class BallScene extends Phaser.Scene {
 			const wallSegmentGO = this.add.rectangle(centerX, centerY, length, wallThickness);
 			
 			this.matter.add.gameObject(wallSegmentGO, {
+				isStatic: true,
 				restitution: 0.5,
 				friction: 0.1
 			});
 			
 			wallSegmentGO.setRotation(angle);
-			wallSegmentGO.setStatic(true);
 			wallSegmentGO.setVisible(false);
 			this.walls.add(wallSegmentGO);
 		}
@@ -203,9 +211,7 @@ class BallScene extends Phaser.Scene {
 			shape: { type: 'circle', radius: this.ballConfig.pixelSize },
 			restitution: this.ballConfig.restitution,
 			frictionAir: this.ballConfig.frictionAir,
-			// --- MODIFICATION: Label the ball body for collision checks ---
 			label: 'ball'
-			// --- END MODIFICATION ---
 		});
 		this.balls.add(ball);
 		ball.color = ballColor;

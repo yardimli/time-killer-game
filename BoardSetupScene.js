@@ -38,9 +38,6 @@ class BoardSetupScene extends Phaser.Scene {
 		this.selectorImage.on('pointermove', this.handlePointerMove, this);
 		this.selectorImage.on('pointerout', this.handlePointerOut, this);
 		this.selectorImage.on('pointerdown', this.handlePointerDown, this);
-		this.game.events.on('toggleMapView', (isMapView) => {
-			this.cameras.main.setVisible(!isMapView);
-		}, this);
 		this.scale.on('resize', this.handleResize, this);
 		this.handleResize(this.scale.gameSize);
 		this.emitBoardConfiguration();

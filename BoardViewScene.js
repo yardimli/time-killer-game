@@ -1,7 +1,7 @@
 // --- Scene 2: The Main Board View ---
 class BoardViewScene extends Phaser.Scene {
 	constructor() {
-		super({ key: 'BoardViewScene', active: true });
+		super({key: 'BoardViewScene', active: true});
 		this.BOARD_PIXEL_WIDTH = 400;
 		this.BOARD_PIXEL_HEIGHT = 400;
 		this.PIXEL_SCALE = 2;
@@ -14,18 +14,25 @@ class BoardViewScene extends Phaser.Scene {
 		this.playArea = null;
 		this.playAreaPolygon = null;
 		
-		this.isMapView = false;
 		this.glitchPipeline = null;
 		this.debugGraphics = null;
-		this.debugDraw = true; // Set to true to enable debug drawing of the playAreaPolygon and goal sensors.
+		this.debugDraw = false; // Set to true to enable debug drawing of the playAreaPolygon and goal sensors.
 		this.shaderGlitches = [];
 		this.activeBorderGlitches = [];
 		this.whiteColor = Phaser.Display.Color.ValueToColor('#FFFFFF');
 		this.glitchConfig = {
-			stretch: { minSize: 0.4, maxSize: 1.0, minDuration: 50, maxDuration: 500, minDelay: 400, maxDelay: 2500 },
-			border: { minLength: 15, maxLength: 150, minDuration: 300, maxDuration: 1500, minDelay: 100, maxDelay: 500, color: '#555555' }
+			stretch: {minSize: 0.4, maxSize: 1.0, minDuration: 50, maxDuration: 500, minDelay: 400, maxDelay: 2500},
+			border: {
+				minLength: 15,
+				maxLength: 150,
+				minDuration: 300,
+				maxDuration: 1500,
+				minDelay: 100,
+				maxDelay: 500,
+				color: '#555555'
+			}
 		};
-		this.goalConfig = { width: 100, depth: 60, chamfer: 8, dashLength: 3, gapLength: 3 };
+		this.goalConfig = {width: 100, depth: 60, chamfer: 8, dashLength: 3, gapLength: 3};
 	}
 	
 	create() {
@@ -52,7 +59,6 @@ class BoardViewScene extends Phaser.Scene {
 			this.drawBoardShape();
 		}, this);
 		
-		this.boardImage.on('pointerdown', this.toggleMapView, this);
 		this.scale.on('resize', this.handleResize, this);
 		this.scheduleNextStretchGlitch();
 		this.scheduleNextBorderGlitch();
@@ -62,7 +68,9 @@ class BoardViewScene extends Phaser.Scene {
 	update(time, delta) {
 		this.shaderGlitches = this.shaderGlitches.filter(glitch => glitch.endTime > time);
 		const maxGlitchAmount = this.shaderGlitches.reduce((max, glitch) => Math.max(max, glitch.size), 0);
-		if (this.glitchPipeline) { this.glitchPipeline.setGlitchAmount(maxGlitchAmount); }
+		if (this.glitchPipeline) {
+			this.glitchPipeline.setGlitchAmount(maxGlitchAmount);
+		}
 		this.updateBorderGlitches(time);
 		this.drawDebug();
 	}
@@ -74,7 +82,7 @@ class BoardViewScene extends Phaser.Scene {
 			this.debugGraphics.lineStyle(2, 0xff0000, 0.7);
 			this.debugGraphics.strokePoints(this.playAreaPolygon.points, true);
 			
-			// --- MODIFICATION: Draw the goal sensor areas ---
+			// --- Draw the goal sensor areas ---
 			// Set a new style to differentiate goals from the main boundary.
 			this.debugGraphics.lineStyle(2, 0x00ff00, 0.7); // Green for goals
 			this.goalSensors.forEach(sensor => {
@@ -82,21 +90,9 @@ class BoardViewScene extends Phaser.Scene {
 				// of its shape, which we can directly draw.
 				this.debugGraphics.strokePoints(sensor.vertices, true);
 			});
-			// --- END MODIFICATION ---
 		}
 	}
 	
-	toggleMapView() {
-		this.isMapView = !this.isMapView;
-		if (this.isMapView) {
-			this.activeBorderGlitches = [];
-			this.playAreaPolygon = null;
-			this.playArea = null;
-		}
-		this.game.events.emit('toggleMapView', this.isMapView);
-		this.handleResize({ width: this.scale.width, height: this.scale.height });
-		this.drawBoardShape();
-	}
 	
 	drawBoardShape() {
 		this.goalSensors.forEach(sensor => this.matter.world.remove(sensor));
@@ -107,30 +103,28 @@ class BoardViewScene extends Phaser.Scene {
 		ctx.clearRect(0, 0, this.BOARD_PIXEL_WIDTH, this.BOARD_PIXEL_HEIGHT);
 		const centerX = this.BOARD_PIXEL_WIDTH / 2;
 		const centerY = this.BOARD_PIXEL_HEIGHT / 2;
-		const radius = this.isMapView ? this.BOARD_PIXEL_WIDTH / 2 - 5 : this.BOARD_PIXEL_WIDTH / 2 - 20;
+		const radius = this.BOARD_PIXEL_WIDTH / 2 - 20;
 		
-		if (!this.isMapView) {
-			const worldVertices = [];
-			const localVertices = [];
-			const worldCenter = { x: this.boardImage.x, y: this.boardImage.y };
+		const worldVertices = [];
+		const localVertices = [];
+		const worldCenter = {x: this.boardImage.x, y: this.boardImage.y};
+		
+		for (let i = 0; i < this.currentSides; i++) {
+			const angle = (i / this.currentSides) * Math.PI * 2 - Math.PI / 2;
+			const canvasX = Math.round(centerX + radius * Math.cos(angle));
+			const canvasY = Math.round(centerY + radius * Math.sin(angle));
 			
-			for (let i = 0; i < this.currentSides; i++) {
-				const angle = (i / this.currentSides) * Math.PI * 2 - Math.PI / 2;
-				const canvasX = Math.round(centerX + radius * Math.cos(angle));
-				const canvasY = Math.round(centerY + radius * Math.sin(angle));
-				
-				const localX = (canvasX - centerX) * this.PIXEL_SCALE;
-				const localY = (canvasY - centerY) * this.PIXEL_SCALE;
-				localVertices.push({ x: localX, y: localY });
-				
-				const worldX = worldCenter.x + localX;
-				const worldY = worldCenter.y + localY;
-				worldVertices.push(new Phaser.Geom.Point(worldX, worldY));
-			}
-			this.playArea = { center: worldCenter, vertices: localVertices };
-			this.playAreaPolygon = new Phaser.Geom.Polygon(worldVertices);
-			this.createGoalSensors(centerX, centerY, radius, worldCenter);
+			const localX = (canvasX - centerX) * this.PIXEL_SCALE;
+			const localY = (canvasY - centerY) * this.PIXEL_SCALE;
+			localVertices.push({x: localX, y: localY});
+			
+			const worldX = worldCenter.x + localX;
+			const worldY = worldCenter.y + localY;
+			worldVertices.push(new Phaser.Geom.Point(worldX, worldY));
 		}
+		this.playArea = {center: worldCenter, vertices: localVertices};
+		this.playAreaPolygon = new Phaser.Geom.Polygon(worldVertices);
+		this.createGoalSensors(centerX, centerY, radius, worldCenter);
 		
 		this.drawArena(ctx, centerX, centerY, radius, this.currentSides, '#FFFFFF', this.borderPixels);
 		this.boardTexture.update();
@@ -161,7 +155,7 @@ class BoardViewScene extends Phaser.Scene {
 	triggerBorderGlitch() {
 		this.scheduleNextBorderGlitch();
 		
-		if (this.isMapView || this.borderPixels.length === 0) return;
+		if (this.borderPixels.length === 0) return;
 		
 		const config = this.glitchConfig.border;
 		const glitchLength = Phaser.Math.Between(config.minLength, config.maxLength);
@@ -184,15 +178,13 @@ class BoardViewScene extends Phaser.Scene {
 	}
 	
 	updateBorderGlitches(time) {
-		if (this.isMapView) return;
-		
 		this.activeBorderGlitches = this.activeBorderGlitches.filter(g => time < g.startTime + g.duration);
 		
 		const ctx = this.boardTexture.getContext();
 		
 		const centerX = this.BOARD_PIXEL_WIDTH / 2;
 		const centerY = this.BOARD_PIXEL_HEIGHT / 2;
-		const radius = this.isMapView ? centerX - 5 : centerX - 20;
+		const radius = centerX - 20;
 		this.drawArena(ctx, centerX, centerY, radius, this.currentSides, '#FFFFFF', null);
 		
 		this.activeBorderGlitches.forEach(glitch => {
@@ -218,22 +210,18 @@ class BoardViewScene extends Phaser.Scene {
 	}
 	
 	handleResize(gameSize) {
-		if (this.isMapView) {
-			this.cameras.main.setViewport(0, 0, gameSize.width, gameSize.height);
-		} else {
-			this.cameras.main.setViewport(
-				0,
-				this.SELECTOR_SCREEN_HEIGHT,
-				gameSize.width,
-				gameSize.height - this.SELECTOR_SCREEN_HEIGHT - this.SCORE_SCREEN_HEIGHT
-			);
-		}
+		this.cameras.main.setViewport(
+			0,
+			this.SELECTOR_SCREEN_HEIGHT,
+			gameSize.width,
+			gameSize.height - this.SELECTOR_SCREEN_HEIGHT - this.SCORE_SCREEN_HEIGHT
+		);
 		this.boardImage.setPosition(this.cameras.main.centerX, this.cameras.main.centerY);
 		this.drawBoardShape();
 	}
 	
 	drawArena(ctx, cx, cy, radius, sides, color = '#FFFFFF', pixelStore = null) {
-		const { width: goalWidth, depth: goalDepth, chamfer, dashLength, gapLength } = this.goalConfig;
+		const {width: goalWidth, depth: goalDepth, chamfer, dashLength, gapLength} = this.goalConfig;
 		ctx.fillStyle = color;
 		
 		const points = [];
@@ -301,7 +289,7 @@ class BoardViewScene extends Phaser.Scene {
 	}
 	
 	createGoalSensors(cx, cy, radius, worldCenter) {
-		const { width: goalWidth, depth: goalDepth } = this.goalConfig;
+		const {width: goalWidth, depth: goalDepth} = this.goalConfig;
 		
 		const points = [];
 		for (let i = 0; i < this.currentSides; i++) {
@@ -363,11 +351,17 @@ class BoardViewScene extends Phaser.Scene {
 		let err = dx + dy;
 		while (true) {
 			ctx.fillRect(x0, y0, 1, 1);
-			if (pixelStore) pixelStore.push({ x: x0, y: y0 });
+			if (pixelStore) pixelStore.push({x: x0, y: y0});
 			if (x0 === x1 && y0 === y1) break;
 			let e2 = 2 * err;
-			if (e2 >= dy) { err += dy; x0 += sx; }
-			if (e2 <= dx) { err += dx; y0 += sy; }
+			if (e2 >= dy) {
+				err += dy;
+				x0 += sx;
+			}
+			if (e2 <= dx) {
+				err += dx;
+				y0 += sy;
+			}
 		}
 	}
 	
@@ -382,7 +376,7 @@ class BoardViewScene extends Phaser.Scene {
 		while (true) {
 			if (isDrawing) {
 				ctx.fillRect(x0, y0, 1, 1);
-				if (pixelStore) pixelStore.push({ x: x0, y: y0 });
+				if (pixelStore) pixelStore.push({x: x0, y: y0});
 			}
 			
 			segmentCounter++;
@@ -397,8 +391,14 @@ class BoardViewScene extends Phaser.Scene {
 			
 			if (x0 === x1 && y0 === y1) break;
 			let e2 = 2 * err;
-			if (e2 >= dy) { err += dy; x0 += sx; }
-			if (e2 <= dx) { err += dx; y0 += sy; }
+			if (e2 >= dy) {
+				err += dy;
+				x0 += sx;
+			}
+			if (e2 <= dx) {
+				err += dx;
+				y0 += sy;
+			}
 		}
 	}
 }
