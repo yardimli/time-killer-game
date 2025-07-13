@@ -7,8 +7,22 @@ const config = {
 		width: '100%',
 		height: '100%'
 	},
+	// --- MODIFICATION START ---
+	// Added the Arcade Physics engine configuration.
+	// Gravity is set to 0 as we will control ball movement manually.
+	physics: {
+		default: 'arcade',
+		arcade: {
+			gravity: { y: 0 }
+			// debug: true // Uncomment to see physics bodies for debugging
+		}
+	},
+	// --- MODIFICATION END ---
 	pixelArt: true,
-	scene: [BoardSetupScene, BoardViewScene],
+	// --- MODIFICATION START ---
+	// Added the new BallScene to the game's scene list.
+	scene: [BoardSetupScene, BoardViewScene, BallScene],
+	// --- MODIFICATION END ---
 	render: {
 		pipeline: {
 			'Glitch': GlitchPostFxPipeline
