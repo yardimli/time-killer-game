@@ -1,34 +1,53 @@
 // --- Scene 3: The Ball Manager ---
 class BallScene extends Phaser.Scene {
 	constructor() {
-		super({ key: 'BallScene', active: true });
-		// --- Configuration for Balls ---
+		super({ key: 'BallScene', active: false });
 		this.ballConfig = {
-			colors: [], // Will be populated by an event from BoardSetupScene.
-			maxBalls: 3, // The maximum number of balls on screen at once.
-			lifespan: 8000, // Time in ms before a ball starts to fade out.
-			fadeDuration: 500, // Time in ms for the fade out animation.
-			respawnDelay: 1000, // Time in ms after a ball is destroyed before a new one spawns.
-			initialSize: 0.1, // The ball's scale when it first appears.
-			finalSize: 0.8, // The ball's final scale after dropping.
-			dropDuration: 700, // Time in ms for the drop animation.
-			pixelSize: 20, // The radius of the ball texture in pixels.
-			drag: 0.98, // The air resistance for physics.
-			bounce: 0.8, // The bounciness of the balls.
-			maxVelocity: 200, // The maximum speed a ball can travel.
-			organicMoveThreshold: 20, // Speed below which a new "nudge" is applied.
-			organicMoveForce: 50 // The force of the organic movement "nudge".
+			colors: [],
+			maxBalls: 3,
+			lifespan: 20000,
+			fadeDuration: 1500,
+			respawnDelay: 1000,
+			initialSize: 0.1,
+			finalSize: 0.8,
+			dropDuration: 700,
+			pixelSize: 35,
+			frictionAir: 0.05,
+			restitution: 0.8,
+			organicMoveThreshold: 0.6,
+			organicMoveForce: 0.00005
 		};
-		
-		this.balls = null; // The physics group for all balls.
-		this.boardViewScene = null; // A reference to the BoardViewScene.
+		this.balls = null;
+		this.boardViewScene = null;
+		this.walls = null;
 	}
+	
+	// --- MODIFIED METHOD: Preload audio assets ---
+	// This function is called by Phaser before the scene's create method is run.
+	// It's the standard place to load all assets needed for the scene.
+	preload() {
+		console.log('BallScene: preload()');
+		// Load a sound for the initial drop and a few for bouncing.
+		// Using multiple bounce sounds adds variety and makes the simulation feel more alive.
+		// You will need to provide these audio files in the specified path (e.g., 'assets/audio/').
+		this.load.audio('drop', 'assets/audio/DSGNBass_Smooth Sub Drop Bass Downer.wav');
+		this.load.audio('bounce1', 'assets/audio/basketball_bounce_single_3.wav');
+		this.load.audio('bounce2', 'assets/audio/basketball_bounce_single_5.wav');
+		this.load.audio('bounce3', 'assets/audio/Vintage Bounce.wav');
+		
+		// --- NEW AUDIO ASSETS ---
+		// Load sounds for user interaction: clicking, valid drop, and invalid drop.
+		this.load.audio('click', 'assets/audio/Item Pick Up.wav');
+		this.load.audio('drop_valid', 'assets/audio/Drop Game Potion.wav');
+		this.load.audio('drop_invalid', 'assets/audio/Hit Item Dropped 2.wav');
+		// --- END NEW AUDIO ASSETS ---
+	}
+	// --- END MODIFIED METHOD ---
 	
 	create() {
 		console.log('BallScene: create()');
 		this.boardViewScene = this.scene.get('BoardViewScene');
 		
-		// Match this scene's camera to the BoardViewScene's camera viewport.
 		this.cameras.main.setViewport(
 			this.boardViewScene.cameras.main.x,
 			this.boardViewScene.cameras.main.y,
@@ -36,46 +55,51 @@ class BallScene extends Phaser.Scene {
 			this.boardViewScene.cameras.main.height
 		);
 		
-		// Create a physics group for the balls with default physics properties.
-		this.balls = this.physics.add.group({
-			bounceX: this.ballConfig.bounce,
-			bounceY: this.ballConfig.bounce,
-			dragX: this.ballConfig.drag,
-			dragY: this.ballConfig.drag,
-			maxVelocity: { x: this.ballConfig.maxVelocity, y: this.ballConfig.maxVelocity }
-		});
+		this.balls = this.add.group();
+		this.walls = this.add.group();
 		
-		// Set up collision between balls themselves.
-		this.physics.add.collider(this.balls, this.balls);
-		
-		// Set up collision between balls and the walls from BoardViewScene.
-		// This will now work correctly because this scene is only started *after*
-		// the boardViewScene.walls group has been created.
-		console.log('walls',this.boardViewScene.walls);
-		this.physics.add.collider(this.balls, this.boardViewScene.walls);
-		
-		// Listen for board configuration changes to get colors and trigger a reset.
 		this.game.events.on('boardConfigurationChanged', (config) => {
 			this.ballConfig.colors = config.colors;
-			this.createBallTextures(); // Create textures for the new colors.
-			this.resetBalls(); // Clear old balls and spawn new ones.
+			this.ballConfig.maxBalls = config.sides;
+			this.createBallTextures();
+			this.createWallsFromPolygon();
+			this.resetBalls();
 		}, this);
 		
-		// Handle user dragging balls.
-		this.input.on('drag', (pointer, gameObject, dragX, dragY) => {
-			gameObject.setPosition(dragX, dragY);
-		});
+		// --- MODIFICATION: Updated drag event handlers for sound and logic ---
+		this.input.on('drag', (pointer, gameObject, dragX, dragY) => { gameObject.setPosition(dragX, dragY); });
+		
 		this.input.on('dragstart', (pointer, gameObject) => {
-			gameObject.body.setImmovable(true);
-			gameObject.body.setVelocity(0, 0);
-		});
-		this.input.on('dragend', (pointer, gameObject) => {
-			gameObject.body.setImmovable(false);
-			// Give the ball a flick based on the drag velocity.
-			gameObject.body.setVelocity(pointer.velocity.x * 10, pointer.velocity.y * 10);
+			// Play a sound when the user starts dragging a ball.
+			this.sound.play('click', { volume: 0.5 });
+			gameObject.setStatic(true);
 		});
 		
-		// Handle window resize to keep camera viewports in sync.
+		this.input.on('dragend', (pointer, gameObject) => {
+			// Check if the ball was dropped inside the valid play area polygon.
+			const playArea = this.boardViewScene.playAreaPolygon;
+			
+			if (playArea && Phaser.Geom.Polygon.Contains(playArea, pointer.x, pointer.y)) {
+				// --- VALID DROP ---
+				// Play a success sound.
+				this.sound.play('drop_valid', { volume: 0.6 });
+				// Make the ball dynamic again.
+				gameObject.setStatic(false);
+				// Apply velocity from the drag release.
+				gameObject.setVelocity(pointer.velocity.x / 5, pointer.velocity.y / 5);
+			} else {
+				// --- INVALID DROP ---
+				// Play an error sound.
+				this.sound.play('drop_invalid', { volume: 0.6 });
+				// If a ball is dropped outside the area, fade it out and trigger a respawn.
+				// We must check if the ball is active to prevent multiple destroy calls.
+				if (gameObject.active) {
+					this.fadeAndDestroyBall(gameObject);
+				}
+			}
+		});
+		// --- END MODIFICATION ---
+		
 		this.scale.on('resize', (gameSize) => {
 			this.cameras.main.setViewport(
 				this.boardViewScene.cameras.main.x,
@@ -87,39 +111,181 @@ class BallScene extends Phaser.Scene {
 	}
 	
 	update(time, delta) {
-		// Apply slow, organic movement to balls that have nearly stopped.
 		this.balls.getChildren().forEach(ball => {
-			if (!ball.body || ball.body.immovable) return;
+			if (!ball.body || ball.isStatic()) return;
 			
-			const speed = ball.body.velocity.length();
-			if (speed < this.ballConfig.organicMoveThreshold) {
+			// To create an "organic" feel, we apply a tiny, random force infrequently.
+			// The threshold is used as a probability gate: this check will pass on average
+			// 1% of the time (since Math.random() > 0.99 is a rare event).
+			// The force is so small that its effect is only noticeable on slow or stationary balls.
+			if (Math.random() > this.ballConfig.organicMoveThreshold) {
 				const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-				const force = this.ballConfig.organicMoveForce;
-				ball.body.setVelocity(Math.cos(angle) * force, Math.sin(angle) * force);
+				const force = new Phaser.Math.Vector2(
+					Math.cos(angle) * this.ballConfig.organicMoveForce,
+					Math.sin(angle) * this.ballConfig.organicMoveForce
+				);
+				ball.applyForce(force);
 			}
 		});
 	}
+	
+	createWallsFromPolygon() {
+		this.walls.clear(true, true);
+		
+		const playArea = this.boardViewScene.playArea;
+		if (!playArea || !playArea.center || !playArea.vertices || playArea.vertices.length < 2) {
+			console.warn('Cannot create walls, playArea data is invalid.');
+			return;
+		}
+		
+		const localVertices = playArea.vertices;
+		const wallThickness = 10;
+		
+		for (let i = 0; i < localVertices.length; i++) {
+			const p1_local = localVertices[i];
+			const p2_local = localVertices[(i + 1) % localVertices.length];
+			
+			const p1_world = { x: playArea.center.x + p1_local.x, y: playArea.center.y + p1_local.y };
+			const p2_world = { x: playArea.center.x + p2_local.x, y: playArea.center.y + p2_local.y };
+			
+			const length = Phaser.Math.Distance.BetweenPoints(p1_world, p2_world);
+			const angle = Phaser.Math.Angle.BetweenPoints(p1_world, p2_world);
+			const centerX = (p1_world.x + p2_world.x) / 2;
+			const centerY = (p1_world.y + p2_world.y) / 2;
+			
+			// 1. Create a standard GameObject Rectangle.
+			const wallSegmentGO = this.add.rectangle(centerX, centerY, length, wallThickness);
+			
+			// 3. Add the GameObject to the Matter world. This gives it a body that matches its size and position.
+			this.matter.add.gameObject(wallSegmentGO, {
+				// We can still pass Matter-specific options here.
+				restitution: 0.5,
+				friction: 0.1
+			});
+			
+			// 4. Set the rotation on the GameObject. The physics body will sync automatically.
+			wallSegmentGO.setRotation(angle);
+			
+			// 5. Now that it has a body, make it static.
+			wallSegmentGO.setStatic(true);
+			
+			// 2. Make it invisible since it's just for physics.
+			wallSegmentGO.setVisible(false);
+			
+			// 6. Add the fully configured GameObject to our tracking group. This is now safe.
+			this.walls.add(wallSegmentGO);
+		}
+	}
+	
+	spawnBall() {
+		if (this.balls.countActive(true) >= this.ballConfig.maxBalls || this.ballConfig.colors.length === 0) { return; }
+		if (!this.boardViewScene.playAreaPolygon) {
+			this.time.delayedCall(50, this.spawnBall, [], this);
+			return;
+		}
+		const targetPoint = this.getRandomPointInPolygon(this.boardViewScene.playAreaPolygon);
+		if (!targetPoint) {
+			console.warn('Could not find a valid spawn point in the polygon.');
+			return;
+		}
+		const spawnX = targetPoint.x;
+		const spawnY = this.cameras.main.worldView.y - 50;
+		const colorIndex = Phaser.Math.Between(0, this.ballConfig.colors.length - 1);
+		const textureKey = `ball_${colorIndex}`;
+		
+		const ball = this.matter.add.image(spawnX, spawnY, textureKey, null, {
+			shape: { type: 'circle', radius: this.ballConfig.pixelSize },
+			restitution: this.ballConfig.restitution,
+			frictionAir: this.ballConfig.frictionAir
+		});
+		this.balls.add(ball);
+		
+		ball.setScale(this.ballConfig.initialSize);
+		ball.setOrigin(0.5, 0.5);
+		ball.setStatic(true);
+		this.input.setDraggable(ball.setInteractive());
+		
+		this.tweens.add({
+			targets: ball,
+			y: targetPoint.y,
+			scale: this.ballConfig.finalSize,
+			duration: this.ballConfig.dropDuration,
+			ease: 'Bounce.easeOut',
+			onStart: () => {
+				// --- MODIFICATION: Play drop sound ---
+				// Play a sound effect for the initial drop, timed with the bounce animation.
+				this.sound.play('drop', { volume: 0.7 });
+				// --- END MODIFICATION ---
+				
+			},
+			onComplete: () => {
+				if (!ball.active) return;
+				
+				
+				ball.setStatic(false);
+				
+				// Give the ball an initial push in a random direction with a random speed.
+				const initialSpeed = Phaser.Math.FloatBetween(2, 5);
+				const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+				
+				const velocityX = Math.cos(angle) * initialSpeed;
+				const velocityY = Math.sin(angle) * initialSpeed;
+				
+				ball.setVelocity(velocityX, velocityY);
+				
+				ball.lifespanTimer = this.time.delayedCall(this.ballConfig.lifespan, this.fadeAndDestroyBall, [ball], this);
+			}
+		});
+	}
+	
+	// --- No changes to the functions below this line ---
 	
 	createBallTextures() {
 		this.ballConfig.colors.forEach((color, index) => {
 			const textureKey = `ball_${index}`;
 			const size = this.ballConfig.pixelSize * 2;
+			const radius = size / 2;
 			
 			if (this.textures.exists(textureKey)) {
 				this.textures.remove(textureKey);
 			}
 			
-			const gfx = this.add.graphics().setVisible(false);
+			// Create a temporary canvas to draw the gradient on.
+			const canvas = this.textures.createCanvas(textureKey, size, size);
+			if (!canvas) return;
+			const ctx = canvas.getContext();
 			
-			gfx.fillStyle(Phaser.Display.Color.HexStringToColor(color).color, 1);
-			gfx.fillCircle(size / 2, size / 2, size / 2);
+			// Create the radial gradient. The highlight (inner circle) is offset
+			// to the top-left to give a 3D lighting effect.
+			const highlightX = radius * 0.7;
+			const highlightY = radius * 0.7;
+			const gradient = ctx.createRadialGradient(
+				highlightX,     // x-coordinate of the start circle's center
+				highlightY,     // y-coordinate of the start circle's center
+				radius * 0.05,  // radius of the start circle (the highlight)
+				radius,         // x-coordinate of the end circle's center
+				radius,         // y-coordinate of the end circle's center
+				radius          // radius of the end circle (the ball)
+			);
 			
-			const highlightColor = Phaser.Display.Color.ValueToColor(color).lighten(50).color;
-			gfx.fillStyle(highlightColor, 1);
-			gfx.fillCircle(size * 0.4, size * 0.4, size * 0.2);
+			// Define the colors for the gradient.
+			const baseColor = Phaser.Display.Color.HexStringToColor(color);
+			const lightColor = Phaser.Display.Color.ValueToColor(color).lighten(75);
+			const darkColor = Phaser.Display.Color.ValueToColor(color).darken(50);
 			
-			gfx.generateTexture(textureKey, size, size);
-			gfx.destroy();
+			// Add color stops to define the gradient's transition.
+			gradient.addColorStop(0, `rgba(${lightColor.r}, ${lightColor.g}, ${lightColor.b}, 1)`);
+			gradient.addColorStop(0.8, `rgba(${baseColor.r}, ${baseColor.g}, ${baseColor.b}, 1)`);
+			gradient.addColorStop(1, `rgba(${darkColor.r}, ${darkColor.g}, ${darkColor.b}, 1)`);
+			
+			// Draw the circle with the gradient fill.
+			ctx.fillStyle = gradient;
+			ctx.beginPath();
+			ctx.arc(radius, radius, radius, 0, Math.PI * 2);
+			ctx.fill();
+			
+			// Refresh the canvas texture so Phaser can use it.
+			canvas.refresh();
 		});
 	}
 	
@@ -130,112 +296,48 @@ class BallScene extends Phaser.Scene {
 		});
 		this.balls.clear(true, true);
 		
+		let ball_delay = 0;
 		for (let i = 0; i < this.ballConfig.maxBalls; i++) {
-			this.spawnBall();
+			// Each ball spawns with its own random delay between 1-2 seconds
+			const delay = Phaser.Math.Between(1000, 2000);
+			ball_delay += delay;
+			this.time.delayedCall(ball_delay, () => {
+				this.spawnBall();
+			});
 		}
-	}
-	
-	spawnBall() {
-		if (this.balls.countActive(true) >= this.ballConfig.maxBalls || this.ballConfig.colors.length === 0) {
-			return;
-		}
-		
-		if (!this.boardViewScene.playAreaPolygon) {
-			this.time.delayedCall(50, this.spawnBall, [], this);
-			return;
-		}
-		
-		// Get a random point inside the arena polygon for the ball to land on.
-		const targetPoint = this.getRandomPointInPolygon(this.boardViewScene.playAreaPolygon);
-		
-		// If the polygon is invalid (e.g., has no area), we can't spawn a ball.
-		if (!targetPoint) {
-			console.warn('Could not find a valid spawn point in the polygon.');
-			return;
-		}
-		
-		const spawnX = targetPoint.x;
-		const spawnY = this.cameras.main.worldView.y - 50;
-		
-		const colorIndex = Phaser.Math.Between(0, this.ballConfig.colors.length - 1);
-		const textureKey = `ball_${colorIndex}`;
-		
-		const ball = this.balls.create(spawnX, spawnY, textureKey);
-		ball.setCircle(this.ballConfig.pixelSize);
-		ball.setScale(this.ballConfig.initialSize);
-		ball.setOrigin(0.5, 0.5);
-		ball.body.setEnable(false);
-		
-		this.input.setDraggable(ball.setInteractive());
-		
-		this.tweens.add({
-			targets: ball,
-			y: targetPoint.y,
-			scale: this.ballConfig.finalSize,
-			duration: this.ballConfig.dropDuration,
-			ease: 'Bounce.easeOut',
-			onComplete: () => {
-				if (!ball.active) return;
-				ball.body.setEnable(true);
-				ball.lifespanTimer = this.time.delayedCall(this.ballConfig.lifespan, this.fadeAndDestroyBall, [ball], this);
-			}
-		});
 	}
 	
 	fadeAndDestroyBall(ball) {
 		if (!ball.active) return;
-		
 		this.tweens.add({
 			targets: ball,
 			alpha: 0,
 			duration: this.ballConfig.fadeDuration,
 			ease: 'Power2',
 			onComplete: () => {
-				ball.destroy();
+				this.balls.remove(ball, true, true);
 				this.time.delayedCall(this.ballConfig.respawnDelay, this.spawnBall, [], this);
 			}
 		});
 	}
 	
-	/**
-	 * Calculates a random point uniformly distributed within a convex polygon.
-	 * This works by breaking the polygon into a "fan" of triangles, picking one
-	 * weighted by its area, and then finding a random point in that triangle.
-	 * @param {Phaser.Geom.Polygon} polygon - The convex polygon to find a point in.
-	 * @returns {Phaser.Geom.Point|null} A point object {x, y} or null if the polygon is invalid.
-	 */
 	getRandomPointInPolygon(polygon) {
-		if (!polygon || !polygon.points || polygon.points.length < 3) {
-			return null;
-		}
-		
+		if (!polygon || !polygon.points || polygon.points.length < 3) { return null; }
 		const vertices = polygon.points;
 		const centralVertex = vertices[0];
 		const triangles = [];
 		let totalArea = 0;
-		
-		// 1. Create a "fan" of triangles using the first vertex as a common point.
 		for (let i = 1; i < vertices.length - 1; i++) {
 			const p1 = centralVertex;
 			const p2 = vertices[i];
 			const p3 = vertices[i + 1];
-			
-			// Use Phaser's built-in function to calculate the area of the triangle.
 			const area = Phaser.Geom.Triangle.Area(new Phaser.Geom.Triangle(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y));
-			
 			triangles.push({ p1, p2, p3, area });
 			totalArea += area;
 		}
-		
-		if (totalArea <= 0) {
-			// This can happen if the polygon is degenerate (e.g., all points on a line).
-			return new Phaser.Geom.Point(centralVertex.x, centralVertex.y);
-		}
-		
-		// 2. Choose a triangle, weighted by its area.
+		if (totalArea <= 0) { return new Phaser.Geom.Point(centralVertex.x, centralVertex.y); }
 		let randomArea = Math.random() * totalArea;
 		let chosenTriangle = null;
-		
 		for (const triangle of triangles) {
 			if (randomArea < triangle.area) {
 				chosenTriangle = triangle;
@@ -243,25 +345,13 @@ class BallScene extends Phaser.Scene {
 			}
 			randomArea -= triangle.area;
 		}
-		// As a fallback for floating point inaccuracies, grab the last triangle.
-		if (!chosenTriangle) {
-			chosenTriangle = triangles[triangles.length - 1];
-		}
-		
-		// 3. Get a random point within the chosen triangle using barycentric coordinates.
+		if (!chosenTriangle) { chosenTriangle = triangles[triangles.length - 1]; }
 		let r1 = Math.random();
 		let r2 = Math.random();
-		
-		// This transform ensures the point is uniformly distributed within the triangle.
-		if (r1 + r2 > 1) {
-			r1 = 1.0 - r1;
-			r2 = 1.0 - r2;
-		}
-		
+		if (r1 + r2 > 1) { r1 = 1.0 - r1; r2 = 1.0 - r2; }
 		const { p1, p2, p3 } = chosenTriangle;
 		const x = p1.x + r1 * (p2.x - p1.x) + r2 * (p3.x - p1.x);
 		const y = p1.y + r1 * (p2.y - p1.y) + r2 * (p3.y - p1.y);
-		
 		return new Phaser.Geom.Point(x, y);
 	}
 }

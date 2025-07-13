@@ -11,7 +11,7 @@ class BoardSetupScene extends Phaser.Scene {
 		this.SLOT_PIXEL_WIDTH = 30;
 		this.NUM_ICONS = 4;
 		this.selectorHitArea = null;
-		// --- MODIFICATION START ---
+
 		// Define the master list of colors available for the balls.
 		this.BALL_COLORS = [
 			'#FF0000', // Red
@@ -22,7 +22,6 @@ class BoardSetupScene extends Phaser.Scene {
 			'#4B0082', // Indigo
 			'#EE82EE'  // Violet
 		];
-		// --- MODIFICATION END ---
 	}
 
 	create() {
@@ -44,10 +43,7 @@ class BoardSetupScene extends Phaser.Scene {
 		}, this);
 		this.scale.on('resize', this.handleResize, this);
 		this.handleResize(this.scale.gameSize);
-		// --- MODIFICATION START ---
-		// Emit the initial board configuration with sides and colors.
 		this.emitBoardConfiguration();
-		// --- MODIFICATION END ---
 	}
 
 	handleResize(gameSize) {
@@ -92,10 +88,7 @@ class BoardSetupScene extends Phaser.Scene {
 			this.currentSides = newSides;
 			this.justClickedIndex = index;
 			this.drawSelectorBar();
-			// --- MODIFICATION START ---
-			// Emit an event with the new number of sides and a unique set of colors.
 			this.emitBoardConfiguration();
-			// --- MODIFICATION END ---
 			this.time.delayedCall(100, () => {
 				this.justClickedIndex = -1;
 				this.drawSelectorBar();
@@ -103,24 +96,19 @@ class BoardSetupScene extends Phaser.Scene {
 		}
 	}
 
-	// --- NEW METHOD START ---
 	/**
 	 * Generates a unique set of colors based on the current number of sides
 	 * and emits an event to other scenes.
 	 */
 	emitBoardConfiguration() {
-		// Shuffle the master color list to get a random order.
 		const shuffledColors = Phaser.Utils.Array.Shuffle([...this.BALL_COLORS]);
-		// Select the number of colors needed for the current shape.
 		const selectedColors = shuffledColors.slice(0, this.currentSides);
 
-		// Emit a global event with the new configuration object.
 		this.game.events.emit('boardConfigurationChanged', {
 			sides: this.currentSides,
 			colors: selectedColors
 		});
 	}
-	// --- NEW METHOD END ---
 
 	drawSelectorBar() {
 		const ctx = this.selectorTexture.getContext();

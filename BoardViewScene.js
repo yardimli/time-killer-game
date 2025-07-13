@@ -8,102 +8,127 @@ class BoardViewScene extends Phaser.Scene {
 		this.SELECTOR_SCREEN_HEIGHT = SELECTOR_SCREEN_HEIGHT - 80; // From globals.js
 		this.borderPixels = [];
 		this.currentSides = 3;
-		this.walls = null;
-		// This will hold the precise geometry of the play area for other scenes to use.
+		// --- MODIFICATION START ---
+		// This will hold the geometry for the physics engine.
+		// It contains the world-space center and local-space vertices.
+		this.playArea = null;
+		// This still holds the world-space polygon for ball spawning.
 		this.playAreaPolygon = null;
+		// --- MODIFICATION END ---
 		this.isMapView = false;
 		this.glitchPipeline = null;
-		
-		// Central Glitch Configuration & State
-		this.shaderGlitches = []; // Stores active stretch glitches for the shader
-		this.activeBorderGlitches = []; // Stores active border glitches for canvas drawing
-		this.whiteColor = Phaser.Display.Color.ValueToColor('#FFFFFF'); // Phaser color object for interpolation
-		
+		this.debugGraphics = null;
+		this.debugDraw = false; // Set to true to enable debug drawing of the playAreaPolygon.
+		this.shaderGlitches = [];
+		this.activeBorderGlitches = [];
+		this.whiteColor = Phaser.Display.Color.ValueToColor('#FFFFFF');
 		this.glitchConfig = {
-			stretch: {
-				minSize: 0.4,
-				maxSize: 1.0,
-				minDuration: 50,
-				maxDuration: 500,
-				minDelay: 400,
-				maxDelay: 2500
-			},
-			border: {
-				minLength: 15,
-				maxLength: 150,
-				minDuration: 300,
-				maxDuration: 1500,
-				minDelay: 100,
-				maxDelay: 500,
-				color: '#555555'
-			}
+			stretch: { minSize: 0.4, maxSize: 1.0, minDuration: 50, maxDuration: 500, minDelay: 400, maxDelay: 2500 },
+			border: { minLength: 15, maxLength: 150, minDuration: 300, maxDuration: 1500, minDelay: 100, maxDelay: 500, color: '#555555' }
 		};
-		
-		// Updated configuration for the goals, now including a dash pattern.
-		this.goalConfig = {
-			width: 100, // The width of the goal opening in pixels.
-			depth: 30, // How far the net pocket sticks out from the wall.
-			chamfer: 8, // The size of the 45-degree corner cut on the net.
-			dashLength: 3, // The length of a dash in pixels.
-			gapLength: 3 // The length of a gap in pixels.
-		};
+		this.goalConfig = { width: 100, depth: 30, chamfer: 8, dashLength: 3, gapLength: 3 };
 	}
 	
 	create() {
 		console.log('BoardViewScene: create()');
 		this.cameras.main.setViewport(0, this.SELECTOR_SCREEN_HEIGHT, this.scale.width, this.scale.height - this.SELECTOR_SCREEN_HEIGHT);
-		
 		this.cameras.main.setPostPipeline('Glitch');
 		this.glitchPipeline = this.cameras.main.getPostPipeline('Glitch');
-		
 		this.boardTexture = this.textures.createCanvas('boardTexture', this.BOARD_PIXEL_WIDTH, this.BOARD_PIXEL_HEIGHT);
 		this.boardImage = this.add.image(
 			this.cameras.main.centerX,
 			this.cameras.main.centerY,
 			'boardTexture'
 		).setScale(this.PIXEL_SCALE).setInteractive();
-		
-		this.walls = this.physics.add.staticGroup();
-		
+		this.debugGraphics = this.add.graphics();
 		this.game.events.on('boardConfigurationChanged', (config) => {
 			this.currentSides = config.sides;
 			this.drawBoardShape();
 		}, this);
-		
-		// Draw the initial board state when the scene is created.
-		// This ensures the physics walls exist before other scenes (like BallScene)
-		// try to create colliders with them.
-		this.drawBoardShape();
-		
 		this.boardImage.on('pointerdown', this.toggleMapView, this);
 		this.scale.on('resize', this.handleResize, this);
-		
 		this.scheduleNextStretchGlitch();
 		this.scheduleNextBorderGlitch();
-		
-		// --- MODIFICATION START ---
-		// Launch the BallScene to run in parallel with this scene.
-		// This starts the gameplay logic (like spawning balls). The balls were not
-		// "dropping" because the BallScene was loaded but never activated, so its
-		// update loop was not running.
 		this.scene.launch('BallScene');
-		// --- MODIFICATION END ---
 	}
 	
 	update(time, delta) {
-		// 1. Update Shader (Stretch) Glitches
 		this.shaderGlitches = this.shaderGlitches.filter(glitch => glitch.endTime > time);
-		const maxGlitchAmount = this.shaderGlitches.reduce((max, glitch) => {
-			return Math.max(max, glitch.size);
-		}, 0);
-		if (this.glitchPipeline) {
-			this.glitchPipeline.setGlitchAmount(maxGlitchAmount);
-		}
-		
-		// 2. Update Canvas (Border) Glitches
+		const maxGlitchAmount = this.shaderGlitches.reduce((max, glitch) => Math.max(max, glitch.size), 0);
+		if (this.glitchPipeline) { this.glitchPipeline.setGlitchAmount(maxGlitchAmount); }
 		this.updateBorderGlitches(time);
+		this.drawDebug();
 	}
 	
+	drawDebug() {
+		this.debugGraphics.clear();
+		if (this.debugDraw && this.playAreaPolygon) {
+			this.debugGraphics.lineStyle(2, 0xff0000, 0.7);
+			this.debugGraphics.strokePoints(this.playAreaPolygon.points, true);
+		}
+	}
+	
+	toggleMapView() {
+		this.isMapView = !this.isMapView;
+		if (this.isMapView) {
+			this.activeBorderGlitches = [];
+			// --- MODIFICATION: Clear both geometry objects in map view ---
+			this.playAreaPolygon = null;
+			this.playArea = null;
+			// --- MODIFICATION END ---
+		}
+		this.game.events.emit('toggleMapView', this.isMapView);
+		this.handleResize({ width: this.scale.width, height: this.scale.height });
+		this.drawBoardShape();
+	}
+	
+	drawBoardShape() {
+		this.borderPixels = [];
+		const ctx = this.boardTexture.getContext();
+		ctx.clearRect(0, 0, this.BOARD_PIXEL_WIDTH, this.BOARD_PIXEL_HEIGHT);
+		const centerX = this.BOARD_PIXEL_WIDTH / 2;
+		const centerY = this.BOARD_PIXEL_HEIGHT / 2;
+		const radius = this.isMapView ? this.BOARD_PIXEL_WIDTH / 2 - 5 : this.BOARD_PIXEL_WIDTH / 2 - 20;
+		
+		// --- MODIFICATION: Generate both local and world vertices ---
+		if (!this.isMapView) {
+			const worldVertices = [];
+			const localVertices = [];
+			const worldCenter = { x: this.boardImage.x, y: this.boardImage.y };
+			
+			for (let i = 0; i < this.currentSides; i++) {
+				const angle = (i / this.currentSides) * Math.PI * 2 - Math.PI / 2;
+				const canvasX = Math.round(centerX + radius * Math.cos(angle));
+				const canvasY = Math.round(centerY + radius * Math.sin(angle));
+				
+				// 1. Calculate LOCAL vertices (relative to the board's center, scaled)
+				//    This is what Matter.js needs.
+				const localX = (canvasX - centerX) * this.PIXEL_SCALE;
+				const localY = (canvasY - centerY) * this.PIXEL_SCALE;
+				localVertices.push({ x: localX, y: localY });
+				
+				// 2. Calculate WORLD vertices by adding the local offset to the world center.
+				//    This is what getRandomPointInPolygon needs.
+				const worldX = worldCenter.x + localX;
+				const worldY = worldCenter.y + localY;
+				worldVertices.push(new Phaser.Geom.Point(worldX, worldY));
+			}
+			// Store the local vertices and world center for the physics body
+			this.playArea = { center: worldCenter, vertices: localVertices };
+			// Store the world-space polygon for ball spawning
+			this.playAreaPolygon = new Phaser.Geom.Polygon(worldVertices);
+		}
+		// --- MODIFICATION END ---
+		
+		this.drawArena(ctx, centerX, centerY, radius, this.currentSides, '#FFFFFF', this.borderPixels);
+		this.boardTexture.update();
+	}
+	
+	drawArena(ctx, cx, cy, radius, sides, color = '#FFFFFF', pixelStore = null) { /* ... unchanged ... */ }
+	drawPixelLine(ctx, x0, y0, x1, y1, pixelStore) { /* ... unchanged ... */ }
+	drawDashedPixelLine(ctx, x0, y0, x1, y1, dashLength, gapLength, pixelStore) { /* ... unchanged ... */ }
+	
+	// --- Unchanged methods from here down ---
 	scheduleNextStretchGlitch() {
 		const config = this.glitchConfig.stretch;
 		const delay = Phaser.Math.Between(config.minDelay, config.maxDelay);
@@ -195,52 +220,6 @@ class BoardViewScene extends Phaser.Scene {
 		this.drawBoardShape();
 	}
 	
-	toggleMapView() {
-		this.isMapView = !this.isMapView;
-		if (this.isMapView) {
-			this.activeBorderGlitches = [];
-		}
-		this.game.events.emit('toggleMapView', this.isMapView);
-		this.handleResize({ width: this.scale.width, height: this.scale.height });
-		this.drawBoardShape();
-	}
-	
-	drawBoardShape() {
-		this.borderPixels = [];
-		const ctx = this.boardTexture.getContext();
-		ctx.clearRect(0, 0, this.BOARD_PIXEL_WIDTH, this.BOARD_PIXEL_HEIGHT);
-		const centerX = this.BOARD_PIXEL_WIDTH / 2;
-		const centerY = this.BOARD_PIXEL_HEIGHT / 2;
-		const radius = this.isMapView ? this.BOARD_PIXEL_WIDTH / 2 - 5 : this.BOARD_PIXEL_WIDTH / 2 - 20;
-		
-		// Create a Phaser.Geom.Polygon from the arena's vertices in world space.
-		// This is used by BallScene to determine where balls can spawn.
-		if (!this.isMapView) {
-			const worldVertices = [];
-			for (let i = 0; i < this.currentSides; i++) {
-				const angle = (i / this.currentSides) * Math.PI * 2 - Math.PI / 2;
-				const canvasX = Math.round(centerX + radius * Math.cos(angle));
-				const canvasY = Math.round(centerY + radius * Math.sin(angle));
-				
-				// Convert canvas point to world point using the boardImage's transform.
-				const worldX = this.boardImage.x + (canvasX - this.BOARD_PIXEL_WIDTH / 2) * this.PIXEL_SCALE;
-				const worldY = this.boardImage.y + (canvasY - this.BOARD_PIXEL_HEIGHT / 2) * this.PIXEL_SCALE;
-				worldVertices.push(new Phaser.Geom.Point(worldX, worldY));
-			}
-			this.playAreaPolygon = new Phaser.Geom.Polygon(worldVertices);
-		} else {
-			this.playAreaPolygon = null; // No play area in map view.
-		}
-		
-		if (this.walls) {
-			this.walls.clear(true, true);
-		}
-		
-		this.drawArena(ctx, centerX, centerY, radius, this.currentSides, '#FFFFFF', this.borderPixels);
-		
-		this.boardTexture.update();
-	}
-	
 	drawArena(ctx, cx, cy, radius, sides, color = '#FFFFFF', pixelStore = null) {
 		const { width: goalWidth, depth: goalDepth, chamfer, dashLength, gapLength } = this.goalConfig;
 		ctx.fillStyle = color;
@@ -289,11 +268,6 @@ class BoardViewScene extends Phaser.Scene {
 			this.drawPixelLine(ctx, p1.x, p1.y, post1.x, post1.y, pixelStore);
 			this.drawPixelLine(ctx, post2.x, post2.y, p2.x, p2.y, pixelStore);
 			
-			if (!this.isMapView && this.walls) {
-				this.createWallBody(p1, post1);
-				this.createWallBody(p2, post2);
-			}
-			
 			const back1 = {
 				x: Math.round(post1.x + normalX * goalDepth + sideVecX * chamfer),
 				y: Math.round(post1.y + normalY * goalDepth + sideVecY * chamfer)
@@ -307,26 +281,6 @@ class BoardViewScene extends Phaser.Scene {
 			this.drawDashedPixelLine(ctx, back1.x, back1.y, back2.x, back2.y, dashLength, gapLength, pixelStore);
 			this.drawDashedPixelLine(ctx, back2.x, back2.y, post2.x, post2.y, dashLength, gapLength, pixelStore);
 		}
-	}
-	
-	createWallBody(p1, p2) {
-		const dx = p2.x - p1.x;
-		const dy = p2.y - p1.y;
-		const length = Math.sqrt(dx * dx + dy * dy);
-		const angle = Math.atan2(dy, dx);
-		const centerX = p1.x + dx * 0.5;
-		const centerY = p1.y + dy * 0.5;
-		
-		const worldX = this.boardImage.x + (centerX - this.BOARD_PIXEL_WIDTH / 2) * this.PIXEL_SCALE;
-		const worldY = this.boardImage.y + (centerY - this.BOARD_PIXEL_HEIGHT / 2) * this.PIXEL_SCALE;
-		
-		const wall = this.walls.create(worldX, worldY);
-		
-		// Use `setDisplaySize` to set the dimensions of the wall's visual and physics body.
-		// The `setSize` method is for setting the input hit area, not the physics body size.
-		wall.setDisplaySize(length * this.PIXEL_SCALE, 2 * this.PIXEL_SCALE);
-		wall.setRotation(angle);
-		wall.refreshBody();
 	}
 	
 	drawPixelLine(ctx, x0, y0, x1, y1, pixelStore) {

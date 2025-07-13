@@ -7,22 +7,20 @@ const config = {
 		width: '100%',
 		height: '100%'
 	},
-	// --- MODIFICATION START ---
-	// Added the Arcade Physics engine configuration.
-	// Gravity is set to 0 as we will control ball movement manually.
+	// --- MODIFICATION: Switched to Matter.js Physics ---
+	// The physics engine has been changed from 'arcade' to 'matter'.
+	// The configuration object is now for Matter.js, with gravity
+	// set to zero and the helpful visual debugger enabled.
 	physics: {
-		default: 'arcade',
-		arcade: {
-			gravity: { y: 0 }
-			// debug: true // Uncomment to see physics bodies for debugging
+		default: 'matter',
+		matter: {
+			gravity: { y: 0 },
+			debug: false // Shows Matter.js physics bodies, vectors, and collisions.
 		}
 	},
-	// --- MODIFICATION END ---
+	// --- END MODIFICATION ---
 	pixelArt: true,
-	// --- MODIFICATION START ---
-	// Added the new BallScene to the game's scene list.
 	scene: [BoardSetupScene, BoardViewScene, BallScene],
-	// --- MODIFICATION END ---
 	render: {
 		pipeline: {
 			'Glitch': GlitchPostFxPipeline
