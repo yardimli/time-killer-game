@@ -20,11 +20,12 @@ class BallScene extends Phaser.Scene {
 		this.balls = null;
 		this.boardViewScene = null;
 		this.walls = null;
+		this.goals = [];
 	}
 	
 	preload() {
 		console.log('BallScene: preload()');
-
+		
 		this.load.audio('drop', 'assets/audio/DSGNBass_Smooth Sub Drop Bass Downer.wav');
 		this.load.audio('bounce1', 'assets/audio/basketball_bounce_single_3.wav');
 		this.load.audio('bounce2', 'assets/audio/basketball_bounce_single_5.wav');
@@ -52,6 +53,7 @@ class BallScene extends Phaser.Scene {
 		this.game.events.on('boardConfigurationChanged', (config) => {
 			this.ballConfig.colors = config.colors;
 			this.ballConfig.maxBalls = config.sides;
+			this.goals = config.goals;
 			this.createBallTextures();
 			this.createWallsFromPolygon();
 			this.resetBalls();
@@ -69,7 +71,9 @@ class BallScene extends Phaser.Scene {
 			
 			if (playArea && Phaser.Geom.Polygon.Contains(playArea, pointer.x, pointer.y)) {
 				// --- VALID DROP ---
-				this.sound.play('drop_valid', { volume: 0.6 });
+				// --- MODIFICATION: Use a neutral sound for dropping back in the arena ---
+				this.sound.play('drop', { volume: 0.6 });
+				// --- END MODIFICATION ---
 				// Make the ball dynamic again.
 				gameObject.setStatic(false);
 				// Apply velocity from the drag release.
@@ -77,13 +81,47 @@ class BallScene extends Phaser.Scene {
 			} else {
 				// --- INVALID DROP ---
 				this.sound.play('drop_invalid', { volume: 0.6 });
-
+				
 				if (gameObject.active) {
 					this.fadeAndDestroyBall(gameObject);
 				}
 			}
 		});
-
+		
+		// --- MODIFICATION: Setup collision detection for scoring ---
+		this.matter.world.on('collisionstart', (event, bodyA, bodyB) => {
+			let ballBody, goalBody;
+			
+			// Identify which body is the ball and which is the goal
+			if (bodyA.label === 'ball' && bodyB.label === 'goal') {
+				ballBody = bodyA;
+				goalBody = bodyB;
+			} else if (bodyB.label === 'ball' && bodyA.label === 'goal') {
+				ballBody = bodyB;
+				goalBody = bodyA;
+			} else {
+				return; // Not a ball-goal collision, so we don't care.
+			}
+			
+			const ball = ballBody.gameObject;
+			
+			// Ensure the ball is a valid, active game object before processing
+			if (ball && ball.active) {
+				// Check if the ball's color matches the goal's assigned color
+				if (ball.color === goalBody.color) {
+					// --- CORRECT GOAL ---
+					this.sound.play('drop_valid', { volume: 0.6 });
+					this.game.events.emit('scorePoint', { color: ball.color });
+					this.fadeAndDestroyBall(ball);
+				} else {
+					// --- WRONG GOAL ---
+					this.sound.play('drop_invalid', { volume: 0.6 });
+					this.fadeAndDestroyBall(ball);
+				}
+			}
+		});
+		// --- END MODIFICATION ---
+		
 		
 		this.scale.on('resize', (gameSize) => {
 			this.cameras.main.setViewport(
@@ -134,26 +172,16 @@ class BallScene extends Phaser.Scene {
 			const centerX = (p1_world.x + p2_world.x) / 2;
 			const centerY = (p1_world.y + p2_world.y) / 2;
 			
-			// 1. Create a standard GameObject Rectangle.
 			const wallSegmentGO = this.add.rectangle(centerX, centerY, length, wallThickness);
 			
-			// 3. Add the GameObject to the Matter world. This gives it a body that matches its size and position.
 			this.matter.add.gameObject(wallSegmentGO, {
-				// We can still pass Matter-specific options here.
 				restitution: 0.5,
 				friction: 0.1
 			});
 			
-			// 4. Set the rotation on the GameObject. The physics body will sync automatically.
 			wallSegmentGO.setRotation(angle);
-			
-			// 5. Now that it has a body, make it static.
 			wallSegmentGO.setStatic(true);
-			
-			// 2. Make it invisible since it's just for physics.
 			wallSegmentGO.setVisible(false);
-			
-			// 6. Add the fully configured GameObject to our tracking group. This is now safe.
 			this.walls.add(wallSegmentGO);
 		}
 	}
@@ -173,13 +201,21 @@ class BallScene extends Phaser.Scene {
 		const spawnY = this.cameras.main.worldView.y - 50;
 		const colorIndex = Phaser.Math.Between(0, this.ballConfig.colors.length - 1);
 		const textureKey = `ball_${colorIndex}`;
+		const ballColor = this.ballConfig.colors[colorIndex];
 		
 		const ball = this.matter.add.image(spawnX, spawnY, textureKey, null, {
 			shape: { type: 'circle', radius: this.ballConfig.pixelSize },
 			restitution: this.ballConfig.restitution,
-			frictionAir: this.ballConfig.frictionAir
+			frictionAir: this.ballConfig.frictionAir,
+			// --- MODIFICATION: Label the ball body for collision checks ---
+			label: 'ball'
+			// --- END MODIFICATION ---
 		});
 		this.balls.add(ball);
+		
+		// --- MODIFICATION: Attach color data directly to the ball GameObject ---
+		ball.color = ballColor;
+		// --- END MODIFICATION ---
 		
 		ball.setScale(this.ballConfig.initialSize);
 		ball.setOrigin(0.5, 0.5);
@@ -201,7 +237,6 @@ class BallScene extends Phaser.Scene {
 				
 				ball.setStatic(false);
 				
-				// Give the ball an initial push in a random direction with a random speed.
 				const initialSpeed = Phaser.Math.FloatBetween(2, 5);
 				const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
 				
@@ -225,41 +260,34 @@ class BallScene extends Phaser.Scene {
 				this.textures.remove(textureKey);
 			}
 			
-			// Create a temporary canvas to draw the gradient on.
 			const canvas = this.textures.createCanvas(textureKey, size, size);
 			if (!canvas) return;
 			const ctx = canvas.getContext();
 			
-			// Create the radial gradient. The highlight (inner circle) is offset
-			// to the top-left to give a 3D lighting effect.
 			const highlightX = radius * 0.7;
 			const highlightY = radius * 0.7;
 			const gradient = ctx.createRadialGradient(
-				highlightX,     // x-coordinate of the start circle's center
-				highlightY,     // y-coordinate of the start circle's center
-				radius * 0.05,  // radius of the start circle (the highlight)
-				radius,         // x-coordinate of the end circle's center
-				radius,         // y-coordinate of the end circle's center
-				radius          // radius of the end circle (the ball)
+				highlightX,
+				highlightY,
+				radius * 0.05,
+				radius,
+				radius,
+				radius
 			);
 			
-			// Define the colors for the gradient.
 			const baseColor = Phaser.Display.Color.HexStringToColor(color);
 			const lightColor = Phaser.Display.Color.ValueToColor(color).lighten(75);
 			const darkColor = Phaser.Display.Color.ValueToColor(color).darken(50);
 			
-			// Add color stops to define the gradient's transition.
 			gradient.addColorStop(0, `rgba(${lightColor.r}, ${lightColor.g}, ${lightColor.b}, 1)`);
 			gradient.addColorStop(0.8, `rgba(${baseColor.r}, ${baseColor.g}, ${baseColor.b}, 1)`);
 			gradient.addColorStop(1, `rgba(${darkColor.r}, ${darkColor.g}, ${darkColor.b}, 1)`);
 			
-			// Draw the circle with the gradient fill.
 			ctx.fillStyle = gradient;
 			ctx.beginPath();
 			ctx.arc(radius, radius, radius, 0, Math.PI * 2);
 			ctx.fill();
 			
-			// Refresh the canvas texture so Phaser can use it.
 			canvas.refresh();
 		});
 	}
@@ -273,7 +301,6 @@ class BallScene extends Phaser.Scene {
 		
 		let ball_delay = 0;
 		for (let i = 0; i < this.ballConfig.maxBalls; i++) {
-			// Each ball spawns with its own random delay between 1-2 seconds
 			const delay = Phaser.Math.Between(1000, 2000);
 			ball_delay += delay;
 			this.time.delayedCall(ball_delay, () => {
@@ -284,6 +311,13 @@ class BallScene extends Phaser.Scene {
 	
 	fadeAndDestroyBall(ball) {
 		if (!ball.active) return;
+		
+		// --- MODIFICATION: Prevent multiple destructions ---
+		// Set the ball to inactive immediately to avoid race conditions
+		// with collision events or timers.
+		ball.setActive(false);
+		// --- END MODIFICATION ---
+		
 		this.tweens.add({
 			targets: ball,
 			alpha: 0,
