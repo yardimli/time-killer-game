@@ -10,19 +10,17 @@ class ScoreScene extends Phaser.Scene {
 		};
 		this.scoreTextObjects = [];
 		
-		// --- MODIFIED SECTION: Configuration updated for new layout ---
 		const sharedConfig = GAME_CONFIG.Shared;
 		// The fixed height of this scene's viewport.
 		this.SCORE_SCREEN_HEIGHT = sharedConfig.SCORE_SCREEN_HEIGHT;
 		// Get the width of the setup scene to correctly offset this scene's viewport.
 		this.SELECTOR_SCREEN_WIDTH = sharedConfig.SELECTOR_SCREEN_WIDTH;
-		// --- END MODIFICATION ---
 	}
 	
 	create() {
 		console.log('ScoreScene: create()');
 		
-		// --- MODIFIED SECTION: Viewport adjusted to be to the right of the setup scene ---
+		// --- Viewport adjusted to be to the right of the setup scene ---
 		// Position this scene's camera at the bottom, but offset by the setup scene's width.
 		this.cameras.main.setViewport(
 			this.SELECTOR_SCREEN_WIDTH, // Start after the left-side setup bar.
@@ -30,7 +28,6 @@ class ScoreScene extends Phaser.Scene {
 			this.scale.width - this.SELECTOR_SCREEN_WIDTH, // Use remaining width.
 			this.SCORE_SCREEN_HEIGHT
 		);
-		// --- END MODIFICATION ---
 		
 		// Listen for board changes to reset and draw the scoreboard.
 		this.game.events.on('boardConfigurationChanged', (config) => {
@@ -46,14 +43,13 @@ class ScoreScene extends Phaser.Scene {
 		
 		// Handle game resize to keep the UI responsive.
 		this.scale.on('resize', (gameSize) => {
-			// --- MODIFIED SECTION: Viewport adjusted to be to the right of the setup scene ---
+			// --- Viewport adjusted to be to the right of the setup scene ---
 			this.cameras.main.setViewport(
 				this.SELECTOR_SCREEN_WIDTH, // Start after the left-side setup bar.
 				gameSize.height - this.SCORE_SCREEN_HEIGHT,
 				gameSize.width - this.SELECTOR_SCREEN_WIDTH, // Use remaining width.
 				this.SCORE_SCREEN_HEIGHT
 			);
-			// --- END MODIFICATION ---
 			this.drawScoreboard();
 		}, this);
 	}

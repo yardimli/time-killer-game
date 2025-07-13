@@ -6,7 +6,7 @@ class BoardSetupScene extends Phaser.Scene {
 		this.hoveredIndex = -1;
 		this.justClickedIndex = -1;
 		
-		// --- MODIFIED SECTION: Configuration updated for vertical layout ---
+		// --- Configuration updated for vertical layout ---
 		this.PIXEL_SCALE = GAME_CONFIG.Shared.PIXEL_SCALE;
 		// The width of the selector bar in screen pixels.
 		this.SELECTOR_SCREEN_WIDTH = GAME_CONFIG.Shared.SELECTOR_SCREEN_WIDTH;
@@ -16,18 +16,16 @@ class BoardSetupScene extends Phaser.Scene {
 		this.SLOT_PIXEL_HEIGHT = GAME_CONFIG.BoardSetupScene.SLOT_PIXEL_HEIGHT;
 		this.NUM_ICONS = GAME_CONFIG.BoardSetupScene.NUM_ICONS;
 		this.BALL_COLORS = GAME_CONFIG.Shared.BALL_COLORS;
-		// --- END MODIFICATION ---
 		
 		this.selectorHitArea = null;
 	}
 	
 	create() {
 		console.log("BoardSetupScene: create()");
-		// --- MODIFIED SECTION: Viewport set to the left side of the screen ---
+		// --- Viewport set to the left side of the screen ---
 		this.cameras.main.setViewport(0, 0, this.SELECTOR_SCREEN_WIDTH, this.scale.height);
 		// The texture is now tall and thin. Its height will be set dynamically in handleResize.
 		this.selectorTexture = this.textures.createCanvas('selectorTexture', this.SELECTOR_PIXEL_WIDTH, 1);
-		// --- END MODIFICATION ---
 		
 		this.selectorImage = this.add.image(0, 0, 'selectorTexture')
 			.setOrigin(0, 0)
@@ -45,7 +43,7 @@ class BoardSetupScene extends Phaser.Scene {
 	}
 	
 	handleResize(gameSize) {
-		// --- MODIFIED SECTION: Viewport and texture resized for a vertical bar ---
+		// --- Viewport and texture resized for a vertical bar ---
 		this.cameras.main.setViewport(0, 0, this.SELECTOR_SCREEN_WIDTH, gameSize.height);
 		const newWidth = this.SELECTOR_PIXEL_WIDTH;
 		const newHeight = gameSize.height / this.PIXEL_SCALE;
@@ -53,11 +51,9 @@ class BoardSetupScene extends Phaser.Scene {
 		this.selectorHitArea.setSize(newWidth, newHeight);
 		this.selectorImage.setPosition(this.cameras.main.x, this.cameras.main.y);
 		this.drawSelectorBar();
-		// --- END MODIFICATION ---
 	}
 	
 	getIconIndexFromPointer(pointer) {
-		// --- MODIFIED SECTION: Logic updated to check Y-axis for vertical layout ---
 		const totalIconsHeight = this.NUM_ICONS * this.SLOT_PIXEL_HEIGHT;
 		const startY = (this.selectorTexture.height - totalIconsHeight) / 2;
 		const localY = (pointer.y - this.selectorImage.y) / this.PIXEL_SCALE;
@@ -66,7 +62,6 @@ class BoardSetupScene extends Phaser.Scene {
 			return -1;
 		}
 		return Math.floor((localY - startY) / this.SLOT_PIXEL_HEIGHT);
-		// --- END MODIFICATION ---
 	}
 	
 	handlePointerMove(pointer) {
@@ -128,7 +123,7 @@ class BoardSetupScene extends Phaser.Scene {
 		const ctx = this.selectorTexture.getContext();
 		ctx.clearRect(0, 0, this.selectorTexture.width, this.selectorTexture.height);
 		const iconSize = 10;
-		// --- MODIFIED SECTION: Drawing logic updated for a vertical column ---
+		// --- Drawing logic updated for a vertical column ---
 		const totalIconsHeight = this.NUM_ICONS * this.SLOT_PIXEL_HEIGHT;
 		const startY = Math.floor((this.selectorTexture.height - totalIconsHeight) / 2);
 		
@@ -158,7 +153,6 @@ class BoardSetupScene extends Phaser.Scene {
 			ctx.fillStyle = isClicked ? '#000000' : '#FFFFFF';
 			this.drawPixelPolygon(ctx, polyX, polyY, iconSize, sides);
 		}
-		// --- END MODIFICATION ---
 		this.selectorTexture.update();
 	}
 	

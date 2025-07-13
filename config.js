@@ -3,7 +3,7 @@
  * This file contains setup variables for game mechanics, UI, and scene-specific behaviors.
  */
 
-// --- NEW FILE: Centralized Game Configuration ---
+// --- Centralized Game Configuration ---
 const GAME_CONFIG = {
 	// Shared values used across multiple scenes
 	Shared: {
@@ -49,9 +49,7 @@ const GAME_CONFIG = {
 	BoardViewScene: {
 		BOARD_PIXEL_WIDTH: 300,
 		BOARD_PIXEL_HEIGHT: 300,
-		// NEW: Added a background color for the main play area.
 		backgroundColor: '#333333',
-		// Set to true to enable debug drawing of the playAreaPolygon and goal sensors.
 		debugDraw: false,
 		glitchConfig: {
 			stretch: { minSize: 0.4, maxSize: 1.0, minDuration: 50, maxDuration: 500, minDelay: 400, maxDelay: 2500 },

@@ -3,7 +3,6 @@ class BoardViewScene extends Phaser.Scene {
 	constructor() {
 		super({key: 'BoardViewScene', active: true});
 		
-		// --- MODIFIED SECTION: Configuration updated for new layout ---
 		const config = GAME_CONFIG.BoardViewScene;
 		const sharedConfig = GAME_CONFIG.Shared;
 		
@@ -16,7 +15,6 @@ class BoardViewScene extends Phaser.Scene {
 		this.debugDraw = config.debugDraw;
 		this.glitchConfig = config.glitchConfig;
 		this.goalConfig = config.goalConfig;
-		// --- END MODIFICATION ---
 		
 		this.borderPixels = [];
 		this.currentSides = 3;
@@ -31,7 +29,7 @@ class BoardViewScene extends Phaser.Scene {
 		this.activeBorderGlitches = [];
 		this.whiteColor = Phaser.Display.Color.ValueToColor('#FFFFFF');
 		
-		// NEW: Properties to hold references to the glitch timers.
+		// Properties to hold references to the glitch timers.
 		this.stretchGlitchTimer = null;
 		this.borderGlitchTimer = null;
 	}
@@ -57,7 +55,7 @@ class BoardViewScene extends Phaser.Scene {
 		).setScale(this.PIXEL_SCALE).setInteractive();
 		this.debugGraphics = this.add.graphics();
 		
-		// MODIFIED: The event listener now calls a dedicated handler function for better organization.
+		// The event listener now calls a dedicated handler function for better organization.
 		this.game.events.on('boardConfigurationChanged', this.handleBoardConfigurationChanged, this);
 		
 		this.scale.on('resize', this.handleResize, this);
@@ -67,7 +65,7 @@ class BoardViewScene extends Phaser.Scene {
 	}
 	
 	/**
-	 * NEW: Handles changes to the board configuration.
+	 * Handles changes to the board configuration.
 	 * This function clears all active and pending glitches before redrawing the board.
 	 * @param {object} config - The new board configuration object.
 	 */
@@ -133,7 +131,8 @@ class BoardViewScene extends Phaser.Scene {
 		ctx.clearRect(0, 0, this.BOARD_PIXEL_WIDTH, this.BOARD_PIXEL_HEIGHT);
 		const centerX = this.BOARD_PIXEL_WIDTH / 2;
 		const centerY = this.BOARD_PIXEL_HEIGHT / 2;
-		const radius = this.BOARD_PIXEL_WIDTH / 2 - 20;
+		const padding = 1; // A small buffer to prevent drawing on the very edge of the canvas.
+		const radius = (this.BOARD_PIXEL_WIDTH / 2) - this.goalConfig.depth - padding;
 		
 		const worldVertices = [];
 		const localVertices = [];
@@ -163,7 +162,7 @@ class BoardViewScene extends Phaser.Scene {
 	scheduleNextStretchGlitch() {
 		const config = this.glitchConfig.stretch;
 		const delay = Phaser.Math.Between(config.minDelay, config.maxDelay);
-		// MODIFIED: Store a reference to the timer so it can be cancelled.
+		// Store a reference to the timer so it can be cancelled.
 		this.stretchGlitchTimer = this.time.delayedCall(delay, this.triggerNewStretchGlitch, [], this);
 	}
 	
@@ -180,7 +179,7 @@ class BoardViewScene extends Phaser.Scene {
 	scheduleNextBorderGlitch() {
 		const config = this.glitchConfig.border;
 		const delay = Phaser.Math.Between(config.minDelay, config.maxDelay);
-		// MODIFIED: Store a reference to the timer so it can be cancelled.
+		// Store a reference to the timer so it can be cancelled.
 		this.borderGlitchTimer = this.time.delayedCall(delay, this.triggerBorderGlitch, [], this);
 	}
 	
@@ -216,7 +215,8 @@ class BoardViewScene extends Phaser.Scene {
 		
 		const centerX = this.BOARD_PIXEL_WIDTH / 2;
 		const centerY = this.BOARD_PIXEL_HEIGHT / 2;
-		const radius = centerX - 20;
+		const padding = 1;
+		const radius = centerX - this.goalConfig.depth - padding;
 		this.drawArena(ctx, centerX, centerY, radius, this.currentSides, '#FFFFFF', null);
 		
 		this.activeBorderGlitches.forEach(glitch => {
