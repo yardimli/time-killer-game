@@ -6,8 +6,8 @@ class BoardViewScene extends Phaser.Scene {
 		const config = GAME_CONFIG.BoardViewScene;
 		const sharedConfig = GAME_CONFIG.Shared;
 		
-		this.BOARD_PIXEL_WIDTH = config.BOARD_PIXEL_WIDTH;
-		this.BOARD_PIXEL_HEIGHT = config.BOARD_PIXEL_HEIGHT;
+		this.boardPixelDimension = 0;
+		
 		this.PIXEL_SCALE = sharedConfig.PIXEL_SCALE;
 		this.SELECTOR_SCREEN_WIDTH = sharedConfig.SELECTOR_SCREEN_WIDTH;
 		this.SCORE_SCREEN_HEIGHT = sharedConfig.SCORE_SCREEN_HEIGHT;
@@ -36,6 +36,9 @@ class BoardViewScene extends Phaser.Scene {
 	
 	create() {
 		console.log('BoardViewScene: create()');
+		
+		this.calculateBoardPixelDimension();
+		
 		this.cameras.main.setViewport(
 			this.SELECTOR_SCREEN_WIDTH,
 			0,
@@ -47,7 +50,8 @@ class BoardViewScene extends Phaser.Scene {
 		
 		this.cameras.main.setPostPipeline('Glitch');
 		this.glitchPipeline = this.cameras.main.getPostPipeline('Glitch');
-		this.boardTexture = this.textures.createCanvas('boardTexture', this.BOARD_PIXEL_WIDTH, this.BOARD_PIXEL_HEIGHT);
+		
+		this.boardTexture = this.textures.createCanvas('boardTexture', this.boardPixelDimension, this.boardPixelDimension);
 		this.boardImage = this.add.image(
 			this.cameras.main.centerX,
 			this.cameras.main.centerY,
@@ -55,7 +59,6 @@ class BoardViewScene extends Phaser.Scene {
 		).setScale(this.PIXEL_SCALE).setInteractive();
 		this.debugGraphics = this.add.graphics();
 		
-		// The event listener now calls a dedicated handler function for better organization.
 		this.game.events.on('boardConfigurationChanged', this.handleBoardConfigurationChanged, this);
 		
 		this.scale.on('resize', this.handleResize, this);
@@ -116,11 +119,8 @@ class BoardViewScene extends Phaser.Scene {
 			
 			this.debugGraphics.lineStyle(2, 0xff0000, 0.7);
 			this.debugGraphics.strokePoints(this.playAreaPolygon.points, true);
-			
-			
 		}
 	}
-	
 	
 	drawBoardShape() {
 		this.goalSensors.forEach(sensor => this.matter.world.remove(sensor));
@@ -128,11 +128,27 @@ class BoardViewScene extends Phaser.Scene {
 		
 		this.borderPixels = [];
 		const ctx = this.boardTexture.getContext();
-		ctx.clearRect(0, 0, this.BOARD_PIXEL_WIDTH, this.BOARD_PIXEL_HEIGHT);
-		const centerX = this.BOARD_PIXEL_WIDTH / 2;
-		const centerY = this.BOARD_PIXEL_HEIGHT / 2;
-		const padding = 1; // A small buffer to prevent drawing on the very edge of the canvas.
-		const radius = (this.BOARD_PIXEL_WIDTH / 2) - this.goalConfig.depth - padding;
+		ctx.clearRect(0, 0, this.boardPixelDimension, this.boardPixelDimension);
+		const centerX = this.boardPixelDimension / 2;
+		const centerY = this.boardPixelDimension / 2;
+		const padding = 10;
+		
+		// --- MODIFICATION START ---
+		// The original calculation could produce a radius that was too large for polygons with few sides (e.g., 3 or 4),
+		// causing their vertices to be drawn outside the canvas bounds (cropping).
+		
+		// 1. Calculate a radius based on the desired apothem, which leaves space for goal depth.
+		const apothem = (this.boardPixelDimension / 2) - this.goalConfig.depth - padding;
+		const calculatedRadius = apothem / Math.cos(Math.PI / this.currentSides);
+		
+		// 2. Calculate the maximum possible radius that can fit inside the canvas without being cropped.
+		const maxFitRadius = (this.boardPixelDimension / 2) - padding;
+		
+		// 3. Use the smaller of the two radii. This ensures the polygon is never drawn larger than the canvas.
+		// For shapes with many sides, calculatedRadius is used, preserving the intended goal geometry.
+		// For shapes with few sides, maxFitRadius is used, prioritizing fitting on screen over exact goal depth.
+		const radius = Math.min(calculatedRadius, maxFitRadius);
+		// --- MODIFICATION END ---
 		
 		const worldVertices = [];
 		const localVertices = [];
@@ -162,7 +178,6 @@ class BoardViewScene extends Phaser.Scene {
 	scheduleNextStretchGlitch() {
 		const config = this.glitchConfig.stretch;
 		const delay = Phaser.Math.Between(config.minDelay, config.maxDelay);
-		// Store a reference to the timer so it can be cancelled.
 		this.stretchGlitchTimer = this.time.delayedCall(delay, this.triggerNewStretchGlitch, [], this);
 	}
 	
@@ -179,7 +194,6 @@ class BoardViewScene extends Phaser.Scene {
 	scheduleNextBorderGlitch() {
 		const config = this.glitchConfig.border;
 		const delay = Phaser.Math.Between(config.minDelay, config.maxDelay);
-		// Store a reference to the timer so it can be cancelled.
 		this.borderGlitchTimer = this.time.delayedCall(delay, this.triggerBorderGlitch, [], this);
 	}
 	
@@ -213,10 +227,19 @@ class BoardViewScene extends Phaser.Scene {
 		
 		const ctx = this.boardTexture.getContext();
 		
-		const centerX = this.BOARD_PIXEL_WIDTH / 2;
-		const centerY = this.BOARD_PIXEL_HEIGHT / 2;
-		const padding = 1;
-		const radius = centerX - this.goalConfig.depth - padding;
+		const centerX = this.boardPixelDimension / 2;
+		const centerY = this.boardPixelDimension / 2;
+		const padding = 10;
+		
+		// --- MODIFICATION START ---
+		// Apply the same geometric correction here for consistent redrawing.
+		// This ensures the border glitches are drawn on the correctly sized polygon, preventing visual mismatches.
+		const apothem = centerX - this.goalConfig.depth - padding;
+		const calculatedRadius = apothem / Math.cos(Math.PI / this.currentSides);
+		const maxFitRadius = centerX - padding;
+		const radius = Math.min(calculatedRadius, maxFitRadius);
+		// --- MODIFICATION END ---
+		
 		this.drawArena(ctx, centerX, centerY, radius, this.currentSides, '#FFFFFF', null);
 		
 		this.activeBorderGlitches.forEach(glitch => {
@@ -242,6 +265,8 @@ class BoardViewScene extends Phaser.Scene {
 	}
 	
 	handleResize(gameSize) {
+		this.calculateBoardPixelDimension();
+		
 		this.cameras.main.setViewport(
 			this.SELECTOR_SCREEN_WIDTH,
 			0,
@@ -249,7 +274,21 @@ class BoardViewScene extends Phaser.Scene {
 			gameSize.height - this.SCORE_SCREEN_HEIGHT
 		);
 		this.boardImage.setPosition(this.cameras.main.centerX, this.cameras.main.centerY);
+		
+		if (this.boardTexture) {
+			this.boardTexture.setSize(this.boardPixelDimension, this.boardPixelDimension);
+		}
+		
 		this.drawBoardShape();
+	}
+	
+	calculateBoardPixelDimension() {
+		const viewportWidth = this.scale.width - this.SELECTOR_SCREEN_WIDTH;
+		const viewportHeight = this.scale.height - this.SCORE_SCREEN_HEIGHT;
+		
+		const maxDisplaySize = Math.min(viewportWidth, viewportHeight);
+		
+		this.boardPixelDimension = Math.floor(maxDisplaySize / this.PIXEL_SCALE);
 	}
 	
 	drawArena(ctx, cx, cy, radius, sides, color = '#FFFFFF', pixelStore = null) {
@@ -267,7 +306,7 @@ class BoardViewScene extends Phaser.Scene {
 		
 		for (let i = 0; i < sides; i++) {
 			const goalInfo = this.goals.find(g => g.side === i);
-			const goalColor = goalInfo ? goalInfo.color : color;
+			const goalColor = color; //goalInfo ? goalInfo.color : color;
 			
 			const p1 = points[i];
 			const p2 = points[(i + 1) % sides];

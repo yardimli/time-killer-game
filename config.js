@@ -47,9 +47,9 @@ const GAME_CONFIG = {
 	
 	// Configuration for BoardViewScene
 	BoardViewScene: {
-		BOARD_PIXEL_WIDTH: 300,
-		BOARD_PIXEL_HEIGHT: 300,
-		backgroundColor: '#333333',
+		// Note: BOARD_PIXEL_WIDTH and BOARD_PIXEL_HEIGHT have been removed.
+		// The board now dynamically resizes to fit the largest possible square in its viewport.
+		backgroundColor: '#111111',
 		debugDraw: false,
 		glitchConfig: {
 			stretch: { minSize: 0.4, maxSize: 1.0, minDuration: 50, maxDuration: 500, minDelay: 400, maxDelay: 2500 },
@@ -64,11 +64,11 @@ const GAME_CONFIG = {
 			}
 		},
 		goalConfig: {
-			width: 100,
-			depth: 60,
-			chamfer: 8,
-			dashLength: 3,
-			gapLength: 3
+			width: 80,
+			depth: 40,
+			chamfer: 18,
+			dashLength: 2,
+			gapLength: 2
 		}
 	},
 	
