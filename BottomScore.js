@@ -1,7 +1,4 @@
-// --- The Bottom Score Bars Manager ---
-// MODIFICATION: This class no longer extends Phaser.Scene. It's a manager class.
 class BottomScore {
-	// MODIFICATION: The constructor now accepts the main scene.
 	constructor(scene) {
 		this.scene = scene; // Store a reference to the main scene.
 		
@@ -23,18 +20,13 @@ class BottomScore {
 		this.SELECTOR_SCREEN_WIDTH = sharedConfig.SELECTOR_SCREEN_WIDTH;
 	}
 	
-	// MODIFICATION: create() is renamed to init() to be called by the main scene.
 	init() {
 		console.log('BottomScore: init()');
-		
-		// MODIFICATION: No camera or viewport setup needed.
 		
 		this.createIndividualProgressBarsUI();
 		
 		this.scene.game.events.on('boardConfigurationChanged', this.handleBoardChange, this);
 		this.scene.game.events.on('scorePoint', this.addScore, this);
-		
-		// MODIFICATION: The resize listener is removed, as it's handled by the main GameScene.
 	}
 	
 	createIndividualProgressBarsUI() {
@@ -70,7 +62,6 @@ class BottomScore {
 			return;
 		}
 		
-		// MODIFICATION: Calculate positions based on the full screen dimensions.
 		const areaX = this.SELECTOR_SCREEN_WIDTH;
 		const areaY = this.scene.scale.height - this.BOTTOM_SCORE_SCREEN_HEIGHT;
 		const areaWidth = this.scene.scale.width - areaX;
@@ -113,7 +104,6 @@ class BottomScore {
 	}
 	
 	handleResize(gameSize) {
-		// MODIFICATION: No viewport to set, just redraw the scoreboard in its new position.
 		this.drawScoreboard();
 	}
 }

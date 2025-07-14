@@ -1,7 +1,5 @@
 // --- The Ball Manager ---
-// MODIFICATION: This class no longer extends Phaser.Scene. It's a manager class.
 class BallManager {
-	// MODIFICATION: The constructor now accepts the main scene and the board view manager.
 	constructor(scene, boardView) {
 		this.scene = scene; // Store a reference to the main scene.
 		this.boardView = boardView; // Store a reference to the board view manager.
@@ -16,13 +14,8 @@ class BallManager {
 		this.goals = [];
 	}
 	
-	// MODIFICATION: preload() is removed. Assets are loaded in the main GameScene.
-	
-	// MODIFICATION: create() is renamed to init() to be called by the main scene.
 	init() {
 		console.log('BallManager: init()');
-		
-		// MODIFICATION: No camera or viewport setup needed; uses the main scene's camera.
 		
 		this.balls = this.scene.add.group();
 		this.walls = this.scene.add.group();
@@ -36,7 +29,6 @@ class BallManager {
 			this.resetBalls();
 		}, this);
 		
-		// MODIFICATION: Input events are handled on the main scene's input manager.
 		this.scene.input.on('drag', (pointer, gameObject, dragX, dragY) => { gameObject.setPosition(dragX, dragY); });
 		
 		this.scene.input.on('dragstart', (pointer, gameObject) => {
@@ -45,7 +37,6 @@ class BallManager {
 		});
 		
 		this.scene.input.on('dragend', (pointer, gameObject) => {
-			// MODIFICATION: References to boardViewScene are replaced with this.boardView.
 			const playArea = this.boardView.playAreaPolygon;
 			const goalSensors = this.boardView.goalSensors;
 			
@@ -59,7 +50,6 @@ class BallManager {
 			if (goalSensors && goalSensors.length > 0) {
 				const point = { x: dropX, y: dropY };
 				console.log('Checking drop point:', point);
-				// MODIFICATION: Use the scene's matter instance.
 				const bodiesUnderPoint = this.scene.matter.query.point(goalSensors, point);
 				
 				if (bodiesUnderPoint.length > 0) {
@@ -100,8 +90,6 @@ class BallManager {
 				}
 			}
 		});
-		
-		// MODIFICATION: The resize listener is removed, as it's handled by the main GameScene.
 	}
 	
 	update(time, delta) {
@@ -122,7 +110,6 @@ class BallManager {
 	createWallsFromPolygon() {
 		this.walls.clear(true, true);
 		
-		// MODIFICATION: Use this.boardView to get play area info.
 		const playArea = this.boardView.playArea;
 		if (!playArea || !playArea.center || !playArea.vertices || playArea.vertices.length < 2) {
 			console.warn('Cannot create walls, playArea data is invalid.');
@@ -144,7 +131,6 @@ class BallManager {
 			const centerX = (p1_world.x + p2_world.x) / 2;
 			const centerY = (p1_world.y + p2_world.y) / 2;
 			
-			// MODIFICATION: Use this.scene to add game objects.
 			const wallSegmentGO = this.scene.add.rectangle(centerX, centerY, length, wallThickness);
 			
 			this.scene.matter.add.gameObject(wallSegmentGO, {
@@ -161,7 +147,6 @@ class BallManager {
 	
 	spawnBall() {
 		if (this.balls.countActive(true) >= this.ballConfig.maxBalls || this.ballConfig.colors.length === 0) { return; }
-		// MODIFICATION: Use this.boardView to get play area info.
 		if (!this.boardView.playAreaPolygon) {
 			this.scene.time.delayedCall(50, this.spawnBall, [], this);
 			return;
@@ -172,13 +157,11 @@ class BallManager {
 			return;
 		}
 		const spawnX = targetPoint.x;
-		// MODIFICATION: Spawn above the visible screen area (y=0).
 		const spawnY = -50;
 		const colorIndex = Phaser.Math.Between(0, this.ballConfig.colors.length - 1);
 		const textureKey = `ball_${colorIndex}`;
 		const ballColor = this.ballConfig.colors[colorIndex];
 		
-		// MODIFICATION: Use this.scene.matter to add physics objects.
 		const ball = this.scene.matter.add.image(spawnX, spawnY, textureKey, null, {
 			shape: { type: 'circle', radius: this.ballConfig.pixelSize },
 			restitution: this.ballConfig.restitution,
@@ -193,7 +176,6 @@ class BallManager {
 		ball.setStatic(true);
 		this.scene.input.setDraggable(ball.setInteractive());
 		
-		// MODIFICATION: Use this.scene.tweens.
 		this.scene.tweens.add({
 			targets: ball,
 			y: targetPoint.y,
@@ -227,7 +209,6 @@ class BallManager {
 			const size = this.ballConfig.pixelSize * 2;
 			const radius = size / 2;
 			
-			// MODIFICATION: Use this.scene.textures.
 			if (this.scene.textures.exists(textureKey)) {
 				this.scene.textures.remove(textureKey);
 			}

@@ -11,14 +11,13 @@ const config = {
 		default: 'matter',
 		matter: {
 			gravity: { y: 0 },
-			debug: true // Shows Matter.js physics bodies, vectors, and collisions.
+			debug: false // Shows Matter.js physics bodies, vectors, and collisions.
 		}
 	},
 	pixelArt: true,
-	// MODIFICATION: The game now only has one scene.
 	scene: [GameScene],
 	render: {
-		transparent: true,
+		transparent: false,
 		pipeline: {
 			'Glitch': GlitchPostFxPipeline,
 		}

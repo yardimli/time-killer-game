@@ -25,6 +25,8 @@ class GameScene extends Phaser.Scene {
 		this.load.audio('click', 'assets/audio/Item Pick Up.wav');
 		this.load.audio('drop_valid', 'assets/audio/Drop Game Potion.wav');
 		this.load.audio('drop_invalid', 'assets/audio/Hit Item Dropped 2.wav');
+		
+		this.load.plugin('rexcrtpipelineplugin', 'rexcrtpipelineplugin.min.js', true);
 	}
 	
 	create() {
@@ -33,6 +35,14 @@ class GameScene extends Phaser.Scene {
 		// Set up post-processing pipelines on the single main camera.
 		this.cameras.main.setPostPipeline(['Glitch']);
 		this.cameras.main.setBackgroundColor(GAME_CONFIG.BoardViewScene.backgroundColor);
+		
+		var postFxPlugin = this.plugins.get('rexcrtpipelineplugin');
+		var postFxPipeline = postFxPlugin.add(this.cameras.main, {
+			warpX: 0.15,
+			warpY: 0.15,
+			scanLineStrength: 0.1,
+			scanLineWidth: 1024
+		});
 		
 		// Instantiate all the game logic managers.
 		this.boardView = new BoardView(this);
@@ -59,10 +69,6 @@ class GameScene extends Phaser.Scene {
 		// 4. After everything is created and positioned, emit the initial board configuration.
 		// This ensures all listeners (like the wall builder) have the correct positional data.
 		this.boardSetup.emitBoardConfiguration();
-		
-		// now add our shader
-		const baseShader = new Phaser.Display.BaseShader('BufferShader', crtShader)
-		this.add.shader(baseShader, 0, 0, this.scale.width, this.scale.height).setOrigin(0, 0)
 	}
 	
 	update(time, delta) {

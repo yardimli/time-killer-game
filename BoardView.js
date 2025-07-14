@@ -1,7 +1,4 @@
-// --- The Main Board View Manager ---
-// MODIFICATION: This class no longer extends Phaser.Scene. It's a manager class.
 class BoardView {
-	// MODIFICATION: The constructor now accepts the main scene.
 	constructor(scene) {
 		this.scene = scene; // Store a reference to the main scene.
 		
@@ -38,14 +35,11 @@ class BoardView {
 		this.borderGlitchTimer = null;
 	}
 	
-	// MODIFICATION: create() is renamed to init() to be called by the main scene.
 	init() {
 		console.log('BoardView: init()');
 		
 		this.calculateBoardPixelDimension();
 		
-		// MODIFICATION: No camera or viewport setup needed.
-		// The main scene's camera already has the correct background color and pipelines.
 		this.glitchPipeline = this.scene.cameras.main.getPostPipeline('Glitch');
 		
 		this.boardTexture = this.scene.textures.createCanvas('boardTexture', this.boardPixelDimension, this.boardPixelDimension);
@@ -59,10 +53,8 @@ class BoardView {
 		
 		this.scene.game.events.on('boardConfigurationChanged', this.handleBoardConfigurationChanged, this);
 		
-		// MODIFICATION: The resize listener is removed, as it's handled by the main GameScene.
 		this.scheduleNextStretchGlitch();
 		this.scheduleNextBorderGlitch();
-		// MODIFICATION: No need to launch BallScene, it's already being initialized.
 	}
 	
 	handleBoardConfigurationChanged(config) {
@@ -111,7 +103,6 @@ class BoardView {
 	}
 	
 	drawBoardShape() {
-		// MODIFICATION: Use this.scene.matter.
 		this.goalSensors.forEach(sensor => this.scene.matter.world.remove(sensor));
 		this.goalSensors = [];
 		
@@ -265,7 +256,6 @@ class BoardView {
 	handleResize(gameSize) {
 		this.calculateBoardPixelDimension();
 		
-		// MODIFICATION: Position the board image in the center of the available play area.
 		const viewX = this.SELECTOR_SCREEN_WIDTH;
 		const viewY = this.TOP_SCORE_SCREEN_HEIGHT;
 		const viewWidth = gameSize.width - this.SELECTOR_SCREEN_WIDTH;
@@ -280,7 +270,6 @@ class BoardView {
 	}
 	
 	calculateBoardPixelDimension() {
-		// MODIFICATION: Use this.scene.scale to get game dimensions.
 		const viewportWidth = this.scene.scale.width - this.SELECTOR_SCREEN_WIDTH;
 		const viewportHeight = this.scene.scale.height - this.TOP_SCORE_SCREEN_HEIGHT - this.BOTTOM_SCORE_SCREEN_HEIGHT;
 		
@@ -420,7 +409,6 @@ class BoardView {
 			
 			const sideAngle = Phaser.Math.Angle.Between(p1.x, p1.y, p2.x, p2.y);
 			
-			// MODIFICATION: Use this.scene.matter.
 			const sensor = this.scene.matter.add.rectangle(
 				goalCenterX_world,
 				goalCenterY_world,

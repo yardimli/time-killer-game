@@ -1,7 +1,4 @@
-// --- The Top Score Bar Manager ---
-// MODIFICATION: This class no longer extends Phaser.Scene. It's a manager class.
 class TopScore {
-	// MODIFICATION: The constructor now accepts the main scene.
 	constructor(scene) {
 		this.scene = scene; // Store a reference to the main scene.
 		
@@ -23,18 +20,14 @@ class TopScore {
 		this.SELECTOR_SCREEN_WIDTH = sharedConfig.SELECTOR_SCREEN_WIDTH;
 	}
 	
-	// MODIFICATION: create() is renamed to init() to be called by the main scene.
 	init() {
 		console.log('TopScore: init()');
-		// MODIFICATION: No camera or viewport setup needed.
 		
 		this.createPixelTexture();
 		this.createTotalProgressBarUI();
 		
 		this.scene.game.events.on('boardConfigurationChanged', this.handleBoardChange, this);
 		this.scene.game.events.on('scorePoint', this.addScore, this);
-		
-		// MODIFICATION: The resize listener is removed, as it's handled by the main GameScene.
 	}
 	
 	createPixelTexture() {
@@ -104,7 +97,6 @@ class TopScore {
 		const totalScore = Object.values(this.scores).reduce((sum, score) => sum + score, 0);
 		const totalProgress = Math.min(totalScore / this.TOTAL_MAX_SCORE, 1.0);
 		
-		// MODIFICATION: Calculate positions based on the full screen dimensions.
 		const areaX = this.SELECTOR_SCREEN_WIDTH;
 		const areaY = 0;
 		const areaWidth = this.scene.scale.width - areaX;
@@ -130,7 +122,6 @@ class TopScore {
 	}
 	
 	handleResize(gameSize) {
-		// MODIFICATION: No viewport to set, just redraw the scoreboard in its new position.
 		this.drawScoreboard();
 	}
 }

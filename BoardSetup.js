@@ -1,7 +1,4 @@
-// --- The Top Selector Bar Manager ---
-// MODIFICATION: This class no longer extends Phaser.Scene. It's a manager class.
 class BoardSetup {
-	// MODIFICATION: The constructor now accepts the main scene.
 	constructor(scene) {
 		this.scene = scene; // Store a reference to the main scene.
 		this.currentSides = 3;
@@ -18,7 +15,6 @@ class BoardSetup {
 		this.selectorHitArea = null;
 	}
 	
-	// MODIFICATION: create() is renamed to init() to be called by the main scene.
 	init() {
 		console.log('BoardSetup: init()');
 		
@@ -34,10 +30,6 @@ class BoardSetup {
 		this.selectorImage.on('pointermove', this.handlePointerMove, this);
 		this.selectorImage.on('pointerout', this.handlePointerOut, this);
 		this.selectorImage.on('pointerdown', this.handlePointerDown, this);
-		
-		// MODIFICATION: The initial event emission is removed from here.
-		// It will now be triggered by the main GameScene after all initialization and resizing is complete.
-		// this.emitBoardConfiguration();
 	}
 	
 	handleResize(gameSize) {
