@@ -9,7 +9,7 @@ const GAME_CONFIG = {
 	Shared: {
 		PIXEL_SCALE: 2,
 		SELECTOR_SCREEN_WIDTH: 100,
-		SCORE_SCREEN_HEIGHT: 60,
+
 		// Master list of all possible ball colors
 		BALL_COLORS: [
 			'#FF0000', // Red
@@ -47,8 +47,6 @@ const GAME_CONFIG = {
 	
 	// Configuration for BoardViewScene
 	BoardViewScene: {
-		// Note: BOARD_PIXEL_WIDTH and BOARD_PIXEL_HEIGHT have been removed.
-		// The board now dynamically resizes to fit the largest possible square in its viewport.
 		backgroundColor: '#111111',
 		debugDraw: false,
 		glitchConfig: {
@@ -72,8 +70,11 @@ const GAME_CONFIG = {
 		}
 	},
 	
-	// Configuration for ScoreScene (can be expanded later)
-	ScoreScene: {
-		// Example: textStyle: { font: '20px monospace', fill: '#ffffff' }
+	// Configuration for the new Top and Bottom score scenes.
+	ScoreScenes: {
+		TOP_SCORE_SCREEN_HEIGHT: 60,
+		BOTTOM_SCORE_SCREEN_HEIGHT: 60,
+		TOTAL_MAX_SCORE: 100,
+		INDIVIDUAL_MAX_SCORE: 20
 	}
 };

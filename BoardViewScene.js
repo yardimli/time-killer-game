@@ -5,12 +5,15 @@ class BoardViewScene extends Phaser.Scene {
 		
 		const config = GAME_CONFIG.BoardViewScene;
 		const sharedConfig = GAME_CONFIG.Shared;
+		const scoreScenesConfig = GAME_CONFIG.ScoreScenes;
+		
+		this.TOP_SCORE_SCREEN_HEIGHT = scoreScenesConfig.TOP_SCORE_SCREEN_HEIGHT;
+		this.BOTTOM_SCORE_SCREEN_HEIGHT = scoreScenesConfig.BOTTOM_SCORE_SCREEN_HEIGHT;
 		
 		this.boardPixelDimension = 0;
 		
 		this.PIXEL_SCALE = sharedConfig.PIXEL_SCALE;
 		this.SELECTOR_SCREEN_WIDTH = sharedConfig.SELECTOR_SCREEN_WIDTH;
-		this.SCORE_SCREEN_HEIGHT = sharedConfig.SCORE_SCREEN_HEIGHT;
 		this.backgroundColor = config.backgroundColor;
 		this.debugDraw = config.debugDraw;
 		this.glitchConfig = config.glitchConfig;
@@ -29,7 +32,6 @@ class BoardViewScene extends Phaser.Scene {
 		this.activeBorderGlitches = [];
 		this.whiteColor = Phaser.Display.Color.ValueToColor('#FFFFFF');
 		
-		// Properties to hold references to the glitch timers.
 		this.stretchGlitchTimer = null;
 		this.borderGlitchTimer = null;
 	}
@@ -41,9 +43,9 @@ class BoardViewScene extends Phaser.Scene {
 		
 		this.cameras.main.setViewport(
 			this.SELECTOR_SCREEN_WIDTH,
-			0,
+			this.TOP_SCORE_SCREEN_HEIGHT,
 			this.scale.width - this.SELECTOR_SCREEN_WIDTH,
-			this.scale.height - this.SCORE_SCREEN_HEIGHT
+			this.scale.height - this.TOP_SCORE_SCREEN_HEIGHT - this.BOTTOM_SCORE_SCREEN_HEIGHT
 		);
 		
 		this.cameras.main.setBackgroundColor(this.backgroundColor);
@@ -52,11 +54,17 @@ class BoardViewScene extends Phaser.Scene {
 		this.glitchPipeline = this.cameras.main.getPostPipeline('Glitch');
 		
 		this.boardTexture = this.textures.createCanvas('boardTexture', this.boardPixelDimension, this.boardPixelDimension);
+		
+		// --- MODIFICATION START ---
+		// Position the boardImage at the center of the camera's *view* (in world coordinates),
+		// not the center of the camera's viewport (in screen coordinates).
 		this.boardImage = this.add.image(
-			this.cameras.main.centerX,
-			this.cameras.main.centerY,
+			this.cameras.main.width / 2,
+			this.cameras.main.height / 2,
 			'boardTexture'
 		).setScale(this.PIXEL_SCALE).setInteractive();
+		// --- MODIFICATION END ---
+		
 		this.debugGraphics = this.add.graphics();
 		
 		this.game.events.on('boardConfigurationChanged', this.handleBoardConfigurationChanged, this);
@@ -133,22 +141,12 @@ class BoardViewScene extends Phaser.Scene {
 		const centerY = this.boardPixelDimension / 2;
 		const padding = 10;
 		
-		// --- MODIFICATION START ---
-		// The original calculation could produce a radius that was too large for polygons with few sides (e.g., 3 or 4),
-		// causing their vertices to be drawn outside the canvas bounds (cropping).
-		
-		// 1. Calculate a radius based on the desired apothem, which leaves space for goal depth.
 		const apothem = (this.boardPixelDimension / 2) - this.goalConfig.depth - padding;
 		const calculatedRadius = apothem / Math.cos(Math.PI / this.currentSides);
 		
-		// 2. Calculate the maximum possible radius that can fit inside the canvas without being cropped.
 		const maxFitRadius = (this.boardPixelDimension / 2) - padding;
 		
-		// 3. Use the smaller of the two radii. This ensures the polygon is never drawn larger than the canvas.
-		// For shapes with many sides, calculatedRadius is used, preserving the intended goal geometry.
-		// For shapes with few sides, maxFitRadius is used, prioritizing fitting on screen over exact goal depth.
 		const radius = Math.min(calculatedRadius, maxFitRadius);
-		// --- MODIFICATION END ---
 		
 		const worldVertices = [];
 		const localVertices = [];
@@ -231,14 +229,10 @@ class BoardViewScene extends Phaser.Scene {
 		const centerY = this.boardPixelDimension / 2;
 		const padding = 10;
 		
-		// --- MODIFICATION START ---
-		// Apply the same geometric correction here for consistent redrawing.
-		// This ensures the border glitches are drawn on the correctly sized polygon, preventing visual mismatches.
 		const apothem = centerX - this.goalConfig.depth - padding;
 		const calculatedRadius = apothem / Math.cos(Math.PI / this.currentSides);
 		const maxFitRadius = centerX - padding;
 		const radius = Math.min(calculatedRadius, maxFitRadius);
-		// --- MODIFICATION END ---
 		
 		this.drawArena(ctx, centerX, centerY, radius, this.currentSides, '#FFFFFF', null);
 		
@@ -269,11 +263,15 @@ class BoardViewScene extends Phaser.Scene {
 		
 		this.cameras.main.setViewport(
 			this.SELECTOR_SCREEN_WIDTH,
-			0,
+			this.TOP_SCORE_SCREEN_HEIGHT,
 			gameSize.width - this.SELECTOR_SCREEN_WIDTH,
-			gameSize.height - this.SCORE_SCREEN_HEIGHT
+			gameSize.height - this.TOP_SCORE_SCREEN_HEIGHT - this.BOTTOM_SCORE_SCREEN_HEIGHT
 		);
-		this.boardImage.setPosition(this.cameras.main.centerX, this.cameras.main.centerY);
+		
+		// --- MODIFICATION START ---
+		// Reposition the boardImage correctly on resize as well.
+		this.boardImage.setPosition(this.cameras.main.width / 2, this.cameras.main.height / 2);
+		// --- MODIFICATION END ---
 		
 		if (this.boardTexture) {
 			this.boardTexture.setSize(this.boardPixelDimension, this.boardPixelDimension);
@@ -284,7 +282,7 @@ class BoardViewScene extends Phaser.Scene {
 	
 	calculateBoardPixelDimension() {
 		const viewportWidth = this.scale.width - this.SELECTOR_SCREEN_WIDTH;
-		const viewportHeight = this.scale.height - this.SCORE_SCREEN_HEIGHT;
+		const viewportHeight = this.scale.height - this.TOP_SCORE_SCREEN_HEIGHT - this.BOTTOM_SCORE_SCREEN_HEIGHT;
 		
 		const maxDisplaySize = Math.min(viewportWidth, viewportHeight);
 		
