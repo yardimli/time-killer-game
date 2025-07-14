@@ -22,7 +22,9 @@ class GameScene extends Phaser.Scene {
 		this.load.audio('bounce1', 'assets/audio/basketball_bounce_single_3.wav');
 		this.load.audio('bounce2', 'assets/audio/basketball_bounce_single_5.wav');
 		this.load.audio('bounce3', 'assets/audio/Vintage Bounce.wav');
-		this.load.audio('click', 'assets/audio/Item Pick Up.wav');
+		this.load.audio('click', 'assets/audio/basketball_bounce_single_5.wav');
+		this.load.audio('click_drop', 'assets/audio/basketball_bounce_single_3.wav');
+		
 		this.load.audio('drop_valid', 'assets/audio/Drop Game Potion.wav');
 		this.load.audio('drop_invalid', 'assets/audio/Hit Item Dropped 2.wav');
 		

@@ -197,17 +197,54 @@ class BoardView {
 		
 		const ctx = this.boardTexture.getContext();
 		
-		const centerX = this.boardPixelDimension / 2;
-		const centerY = this.boardPixelDimension / 2;
-		const padding = 10;
+		// --- MODIFICATION START ---
+		// The previous implementation redrew the entire arena every frame, then drew the glitch
+		// effect over it. This overdraw caused visual artifacts like the disappearing dashes.
+		// The new implementation clears the canvas and draws each segment (glitched or not) exactly once.
+		ctx.clearRect(0, 0, this.boardPixelDimension, this.boardPixelDimension);
 		
-		const apothem = centerX - this.goalConfig.depth - padding;
-		const calculatedRadius = apothem / Math.cos(Math.PI / this.currentSides);
-		const maxFitRadius = centerX - padding;
-		const radius = Math.min(calculatedRadius, maxFitRadius);
+		// Create a set of all segments that are currently part of an active glitch.
+		// A Set provides fast O(1) average time complexity for lookups.
+		const allGlitchedSegments = new Set();
+		this.activeBorderGlitches.forEach(glitch => {
+			glitch.segments.forEach(segment => allGlitchedSegments.add(segment));
+		});
 		
-		this.drawArena(ctx, centerX, centerY, radius, this.currentSides, '#FFFFFF', null);
+		// Filter the master list of border segments into those that are not glitched.
+		const nonGlitchedSegments = this.borderSegments.filter(s => !allGlitchedSegments.has(s));
+		const { dashLength, gapLength } = this.goalConfig;
 		
+		// --- Draw non-glitched segments ---
+		// These form the static, white part of the board.
+		ctx.strokeStyle = '#FFFFFF';
+		ctx.lineWidth = 1;
+		
+		// Batch draw all non-glitched wall segments (solid lines).
+		const nonGlitchedWalls = nonGlitchedSegments.filter(s => !s.isGoal);
+		if (nonGlitchedWalls.length > 0) {
+			ctx.setLineDash([]);
+			ctx.beginPath();
+			nonGlitchedWalls.forEach(segment => {
+				ctx.moveTo(segment.p1.x, segment.p1.y);
+				ctx.lineTo(segment.p2.x, segment.p2.y);
+			});
+			ctx.stroke();
+		}
+		
+		// Batch draw all non-glitched goal segments (dashed lines).
+		const nonGlitchedGoals = nonGlitchedSegments.filter(s => s.isGoal);
+		if (nonGlitchedGoals.length > 0) {
+			ctx.setLineDash([dashLength, gapLength]);
+			ctx.beginPath();
+			nonGlitchedGoals.forEach(segment => {
+				ctx.moveTo(segment.p1.x, segment.p1.y);
+				ctx.lineTo(segment.p2.x, segment.p2.y);
+			});
+			ctx.stroke();
+		}
+		
+		// --- Draw glitched segments ---
+		// This logic remains the same, but now it draws onto a clean background, preventing overdraw.
 		this.activeBorderGlitches.forEach(glitch => {
 			const elapsed = time - glitch.startTime;
 			const progress = elapsed / glitch.duration;
@@ -225,7 +262,6 @@ class BoardView {
 			
 			const goalSegments = glitch.segments.filter(s => s.isGoal);
 			const wallSegments = glitch.segments.filter(s => !s.isGoal);
-			const { dashLength, gapLength } = this.goalConfig;
 			
 			if (wallSegments.length > 0) {
 				ctx.setLineDash([]);
@@ -247,6 +283,7 @@ class BoardView {
 				ctx.stroke();
 			}
 		});
+		// --- MODIFICATION END ---
 		
 		ctx.setLineDash([]);
 		

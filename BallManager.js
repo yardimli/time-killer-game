@@ -34,9 +34,22 @@ class BallManager {
 		this.scene.input.on('dragstart', (pointer, gameObject) => {
 			this.scene.sound.play('click', { volume: 0.5 });
 			gameObject.setStatic(true);
+			
+			this.scene.children.bringToTop(gameObject);
+			
+			this.scene.tweens.add({
+				targets: gameObject,
+				scale: this.ballConfig.finalSize * 0.75,
+				duration: 150,
+				ease: 'Power2'
+			});
 		});
 		
+		// --- MODIFICATION START ---
+		// The dragend logic is updated to create a "drop and bounce" effect.
 		this.scene.input.on('dragend', (pointer, gameObject) => {
+			this.scene.tweens.killTweensOf(gameObject);
+			
 			const playArea = this.boardView.playAreaPolygon;
 			const goalSensors = this.boardView.goalSensors;
 			
@@ -71,18 +84,84 @@ class BallManager {
 				
 				if (ball && ball.active) {
 					if (ball.color === hitSensor.color) {
+						// --- MODIFICATION START ---
+						// The original logic is replaced with a new animation sequence.
 						this.scene.sound.play('drop_valid', { volume: 0.6 });
-						this.scene.game.events.emit('scorePoint', { color: ball.color });
-						this.fadeAndDestroyBall(ball);
+						
+						// Prevent the ball from being dragged or affected by physics during the animation.
+						ball.setStatic(true);
+						ball.setActive(false); // Also set inactive to be safe.
+						
+						// Get the target coordinates from the BottomScore manager.
+						const targetInfo = this.scene.bottomScore.getBarAnimationInfo(ball.color);
+						
+						if (targetInfo) {
+							// Tell the BottomScore UI to start its "drawer open" animation.
+							this.scene.game.events.emit('startGoalAnimation', { color: ball.color });
+							
+							// Animate the ball flying into the score bar.
+							this.scene.tweens.add({
+								targets: ball,
+								x: targetInfo.x,
+								y: targetInfo.y,
+								scale: 0, // Shrink the ball as it enters the "gate".
+								duration: 400,
+								ease: 'Cubic.easeIn',
+								delay: 250, // Wait for the drawer animation to play out a bit.
+								onComplete: () => {
+									// Once the ball arrives at the destination:
+									// 1. Officially score the point.
+									this.scene.game.events.emit('scorePoint', { color: ball.color });
+									
+									// 2. Tell the BottomScore UI to close the drawer.
+									this.scene.game.events.emit('endGoalAnimation', { color: ball.color });
+									
+									// 3. Clean up the ball object and schedule a new one to spawn.
+									this.balls.remove(ball, true, true);
+									this.scene.time.delayedCall(this.ballConfig.respawnDelay, this.spawnBall, [], this);
+								}
+							});
+						} else {
+							// Fallback in case the animation target can't be found.
+							// This preserves the original scoring behavior.
+							this.scene.game.events.emit('scorePoint', { color: ball.color });
+							this.fadeAndDestroyBall(ball);
+						}
+						// --- MODIFICATION END ---
 					} else {
 						this.scene.sound.play('drop_invalid', { volume: 0.6 });
 						this.fadeAndDestroyBall(ball);
 					}
 				}
 			} else if (isValidDrop) {
-				this.scene.sound.play('drop', { volume: 0.6 });
-				gameObject.setStatic(false);
-				gameObject.setVelocity(pointer.velocity.x / 5, pointer.velocity.y / 5);
+				this.scene.sound.play('click_drop', { volume: 0.6 });
+				
+				// To create a "fall" effect, we slightly lift the ball before dropping it.
+				const finalDropY = gameObject.y;
+				gameObject.y -= 20; // Lift it up a bit.
+				
+				// Animate the ball dropping down with a bounce.
+				this.scene.tweens.add({
+					targets: gameObject,
+					y: finalDropY, // Animate to the original drop position.
+					duration: 600,
+					ease: 'Bounce.easeOut',
+					onComplete: () => {
+						// Only make the ball dynamic after the drop animation is complete.
+						if (gameObject.active) {
+							gameObject.setStatic(false);
+							gameObject.setVelocity(pointer.velocity.x / 5, pointer.velocity.y / 5);
+						}
+					}
+				});
+				
+				// Concurrently, animate the scale back to its normal size.
+				this.scene.tweens.add({
+					targets: gameObject,
+					scale: this.ballConfig.finalSize,
+					duration: 250,
+					ease: 'Sine.easeOut'
+				});
 			} else {
 				this.scene.sound.play('drop_invalid', { volume: 0.6 });
 				if (gameObject.active) {
@@ -90,6 +169,7 @@ class BallManager {
 				}
 			}
 		});
+		// --- MODIFICATION END ---
 	}
 	
 	update(time, delta) {

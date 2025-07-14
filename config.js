@@ -9,7 +9,6 @@ const GAME_CONFIG = {
 	Shared: {
 		PIXEL_SCALE: 2,
 		SELECTOR_SCREEN_WIDTH: 100,
-		ScanLineMultiplier : 4, // the shader doesn't work well on small resolutions
 		
 		// Master list of all possible ball colors
 		BALL_COLORS: [
@@ -68,7 +67,7 @@ const GAME_CONFIG = {
 			depth: 40,
 			chamfer: 18,
 			dashLength: 2,
-			gapLength: 2
+			gapLength: 6
 		}
 	},
 	

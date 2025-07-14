@@ -17,7 +17,7 @@ const config = {
 	pixelArt: true,
 	scene: [GameScene],
 	render: {
-		transparent: false,
+		transparent: true,
 		pipeline: {
 			'Glitch': GlitchPostFxPipeline,
 		}
