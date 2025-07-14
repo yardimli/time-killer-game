@@ -1,7 +1,9 @@
-// --- Scene 4: The Top Score Bar ---
-class TopScoreScene extends Phaser.Scene {
-	constructor() {
-		super({ key: 'TopScoreScene', active: true });
+// --- The Top Score Bar Manager ---
+// MODIFICATION: This class no longer extends Phaser.Scene. It's a manager class.
+class TopScore {
+	// MODIFICATION: The constructor now accepts the main scene.
+	constructor(scene) {
+		this.scene = scene; // Store a reference to the main scene.
 		
 		this.scores = {};
 		this.scoreConfig = {
@@ -9,12 +11,10 @@ class TopScoreScene extends Phaser.Scene {
 			goals: []
 		};
 		
-		// UI elements for the total progress bar.
 		this.totalProgressBar = null;
 		this.totalProgressFill = null;
 		this.totalPercentageText = null;
 		
-		// Get configuration from the central config file.
 		const sharedConfig = GAME_CONFIG.Shared;
 		const scoreScenesConfig = GAME_CONFIG.ScoreScenes;
 		
@@ -23,39 +23,27 @@ class TopScoreScene extends Phaser.Scene {
 		this.SELECTOR_SCREEN_WIDTH = sharedConfig.SELECTOR_SCREEN_WIDTH;
 	}
 	
-	create() {
-		console.log('TopScoreScene: create()');
-		this.cameras.main.setPostPipeline('Scanline');
-		
-		// Position this scene's camera at the top of the screen.
-		this.cameras.main.setViewport(
-			this.SELECTOR_SCREEN_WIDTH,
-			0, // Start at the top.
-			this.scale.width - this.SELECTOR_SCREEN_WIDTH,
-			this.TOP_SCORE_SCREEN_HEIGHT
-		);
+	// MODIFICATION: create() is renamed to init() to be called by the main scene.
+	init() {
+		console.log('TopScore: init()');
+		// MODIFICATION: No camera or viewport setup needed.
 		
 		this.createPixelTexture();
 		this.createTotalProgressBarUI();
 		
-		// Listen for events to update the score.
-		this.game.events.on('boardConfigurationChanged', this.handleBoardChange, this);
-		this.game.events.on('scorePoint', this.addScore, this);
+		this.scene.game.events.on('boardConfigurationChanged', this.handleBoardChange, this);
+		this.scene.game.events.on('scorePoint', this.addScore, this);
 		
-		// Handle resizing.
-		this.scale.on('resize', this.handleResize, this);
+		// MODIFICATION: The resize listener is removed, as it's handled by the main GameScene.
 	}
 	
-	/**
-	 * Creates a small, dithered/pixelated texture for the progress bar fill.
-	 */
 	createPixelTexture() {
 		const textureKey = 'pixelFillTexture';
-		if (this.textures.exists(textureKey)) {
+		if (this.scene.textures.exists(textureKey)) {
 			return;
 		}
 		
-		const canvas = this.textures.createCanvas(textureKey, 4, 4);
+		const canvas = this.scene.textures.createCanvas(textureKey, 4, 4);
 		if (!canvas) return;
 		const ctx = canvas.getContext('2d');
 		
@@ -71,13 +59,10 @@ class TopScoreScene extends Phaser.Scene {
 		canvas.refresh();
 	}
 	
-	/**
-	 * Creates the persistent game objects for the total progress bar UI.
-	 */
 	createTotalProgressBarUI() {
-		this.totalProgressBar = this.add.graphics();
-		this.totalProgressFill = this.add.tileSprite(0, 0, 0, 0, 'pixelFillTexture');
-		this.totalPercentageText = this.add.text(0, 0, '0%', {
+		this.totalProgressBar = this.scene.add.graphics();
+		this.totalProgressFill = this.scene.add.tileSprite(0, 0, 0, 0, 'pixelFillTexture');
+		this.totalPercentageText = this.scene.add.text(0, 0, '0%', {
 			font: '16px monospace',
 			fill: '#000000',
 			stroke: '#FFFFFF',
@@ -86,10 +71,6 @@ class TopScoreScene extends Phaser.Scene {
 		}).setOrigin(0.5);
 	}
 	
-	/**
-	 * Resets scores when the board configuration changes.
-	 * @param {object} config - The new board configuration.
-	 */
 	handleBoardChange(config) {
 		this.scoreConfig.colors = config.colors;
 		this.scoreConfig.goals = config.goals;
@@ -100,10 +81,6 @@ class TopScoreScene extends Phaser.Scene {
 		this.drawScoreboard();
 	}
 	
-	/**
-	 * Increments the score for a given color and redraws the UI.
-	 * @param {object} data - The score data, containing the color.
-	 */
 	addScore(data) {
 		const color = data.color;
 		if (this.scores[color] !== undefined) {
@@ -112,9 +89,6 @@ class TopScoreScene extends Phaser.Scene {
 		}
 	}
 	
-	/**
-	 * Redraws the total progress bar.
-	 */
 	drawScoreboard() {
 		this.totalProgressBar.clear();
 		
@@ -130,10 +104,16 @@ class TopScoreScene extends Phaser.Scene {
 		const totalScore = Object.values(this.scores).reduce((sum, score) => sum + score, 0);
 		const totalProgress = Math.min(totalScore / this.TOTAL_MAX_SCORE, 1.0);
 		
-		const barHeight = this.cameras.main.height * 0.5;
-		const barY = this.cameras.main.height / 2 - barHeight / 2;
-		const barWidth = this.cameras.main.width * 0.9;
-		const barX = (this.cameras.main.width - barWidth) / 2;
+		// MODIFICATION: Calculate positions based on the full screen dimensions.
+		const areaX = this.SELECTOR_SCREEN_WIDTH;
+		const areaY = 0;
+		const areaWidth = this.scene.scale.width - areaX;
+		const areaHeight = this.TOP_SCORE_SCREEN_HEIGHT;
+		
+		const barHeight = areaHeight * 0.5;
+		const barY = areaY + areaHeight / 2 - barHeight / 2;
+		const barWidth = areaWidth * 0.9;
+		const barX = areaX + (areaWidth - barWidth) / 2;
 		
 		this.totalProgressBar.lineStyle(2, 0xFFFFFF, 1);
 		this.totalProgressBar.strokeRect(barX, barY, barWidth, barHeight);
@@ -149,17 +129,8 @@ class TopScoreScene extends Phaser.Scene {
 			.setPosition(barX + barWidth / 2, barY + barHeight / 2);
 	}
 	
-	/**
-	 * Handles game window resizing.
-	 * @param {Phaser.Structs.Size} gameSize - The new size of the game.
-	 */
 	handleResize(gameSize) {
-		this.cameras.main.setViewport(
-			this.SELECTOR_SCREEN_WIDTH,
-			0,
-			gameSize.width - this.SELECTOR_SCREEN_WIDTH,
-			this.TOP_SCORE_SCREEN_HEIGHT
-		);
+		// MODIFICATION: No viewport to set, just redraw the scoreboard in its new position.
 		this.drawScoreboard();
 	}
 }

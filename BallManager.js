@@ -1,7 +1,10 @@
-// --- Scene 3: The Ball Manager ---
-class BallScene extends Phaser.Scene {
-	constructor() {
-		super({ key: 'BallScene', active: false });
+// --- The Ball Manager ---
+// MODIFICATION: This class no longer extends Phaser.Scene. It's a manager class.
+class BallManager {
+	// MODIFICATION: The constructor now accepts the main scene and the board view manager.
+	constructor(scene, boardView) {
+		this.scene = scene; // Store a reference to the main scene.
+		this.boardView = boardView; // Store a reference to the board view manager.
 		
 		this.ballConfig = { ...GAME_CONFIG.BallScene };
 		// These properties are set dynamically when the board configuration changes.
@@ -9,41 +12,22 @@ class BallScene extends Phaser.Scene {
 		this.ballConfig.maxBalls = this.ballConfig.defaultMaxBalls;
 		
 		this.balls = null;
-		this.boardViewScene = null;
 		this.walls = null;
 		this.goals = [];
 	}
 	
-	preload() {
-		console.log('BallScene: preload()');
-		
-		this.load.audio('drop', 'assets/audio/DSGNBass_Smooth Sub Drop Bass Downer.wav');
-		this.load.audio('bounce1', 'assets/audio/basketball_bounce_single_3.wav');
-		this.load.audio('bounce2', 'assets/audio/basketball_bounce_single_5.wav');
-		this.load.audio('bounce3', 'assets/audio/Vintage Bounce.wav');
-		
-		this.load.audio('click', 'assets/audio/Item Pick Up.wav');
-		this.load.audio('drop_valid', 'assets/audio/Drop Game Potion.wav');
-		this.load.audio('drop_invalid', 'assets/audio/Hit Item Dropped 2.wav');
-	}
+	// MODIFICATION: preload() is removed. Assets are loaded in the main GameScene.
 	
-	create() {
-		console.log('BallScene: create()');
-		this.cameras.main.setPostPipeline('Scanline');
+	// MODIFICATION: create() is renamed to init() to be called by the main scene.
+	init() {
+		console.log('BallManager: init()');
 		
-		this.boardViewScene = this.scene.get('BoardViewScene');
+		// MODIFICATION: No camera or viewport setup needed; uses the main scene's camera.
 		
-		this.cameras.main.setViewport(
-			this.boardViewScene.cameras.main.x,
-			this.boardViewScene.cameras.main.y,
-			this.boardViewScene.cameras.main.width,
-			this.boardViewScene.cameras.main.height
-		);
+		this.balls = this.scene.add.group();
+		this.walls = this.scene.add.group();
 		
-		this.balls = this.add.group();
-		this.walls = this.add.group();
-		
-		this.game.events.on('boardConfigurationChanged', (config) => {
+		this.scene.game.events.on('boardConfigurationChanged', (config) => {
 			this.ballConfig.colors = config.colors;
 			this.ballConfig.maxBalls = config.sides;
 			this.goals = config.goals;
@@ -52,88 +36,72 @@ class BallScene extends Phaser.Scene {
 			this.resetBalls();
 		}, this);
 		
-		this.input.on('drag', (pointer, gameObject, dragX, dragY) => { gameObject.setPosition(dragX, dragY); });
+		// MODIFICATION: Input events are handled on the main scene's input manager.
+		this.scene.input.on('drag', (pointer, gameObject, dragX, dragY) => { gameObject.setPosition(dragX, dragY); });
 		
-		this.input.on('dragstart', (pointer, gameObject) => {
-			this.sound.play('click', { volume: 0.5 });
+		this.scene.input.on('dragstart', (pointer, gameObject) => {
+			this.scene.sound.play('click', { volume: 0.5 });
 			gameObject.setStatic(true);
 		});
 		
-		this.input.on('dragend', (pointer, gameObject) => {
-			const playArea = this.boardViewScene.playAreaPolygon;
-			const goalSensors = this.boardViewScene.goalSensors;
+		this.scene.input.on('dragend', (pointer, gameObject) => {
+			// MODIFICATION: References to boardViewScene are replaced with this.boardView.
+			const playArea = this.boardView.playAreaPolygon;
+			const goalSensors = this.boardView.goalSensors;
 			
 			const dropX = gameObject.x;
 			const dropY = gameObject.y;
 			
 			let isValidDrop = false;
 			let isGoalDrop = false;
-			let hitSensor = null; // To store the sensor if a goal drop occurs
+			let hitSensor = null;
 			
-			// First, check if the drop is inside a goal sensor.
-			// This is more specific and should be checked before the general play area.
 			if (goalSensors && goalSensors.length > 0) {
 				const point = { x: dropX, y: dropY };
 				console.log('Checking drop point:', point);
-				// Use Matter's built-in point query for perfect accuracy with the physics bodies.
-				const bodiesUnderPoint = this.matter.query.point(goalSensors, point);
+				// MODIFICATION: Use the scene's matter instance.
+				const bodiesUnderPoint = this.scene.matter.query.point(goalSensors, point);
 				
 				if (bodiesUnderPoint.length > 0) {
-					hitSensor = bodiesUnderPoint[0]; // The Matter body of the sensor that was hit.
+					hitSensor = bodiesUnderPoint[0];
 					isValidDrop = true;
 					isGoalDrop = true;
 				}
 			}
 			
-			// If not a goal drop, check if it's within the general play area.
 			if (!isGoalDrop && playArea) {
 				if (Phaser.Geom.Polygon.Contains(playArea, pointer.x, pointer.y)) {
 					isValidDrop = true;
 				}
 			}
 			
-			// Now, handle the outcome based on the flags.
 			if (isGoalDrop) {
-				// --- GOAL DROP ---
 				console.log('Valid drop inside goal sensor:', hitSensor);
 				const ball = gameObject;
 				
-				// Ensure the ball is a valid, active game object before processing
 				if (ball && ball.active) {
-					// The 'color' property was attached directly to the Matter body in BoardViewScene.
 					if (ball.color === hitSensor.color) {
-						// --- CORRECT GOAL ---
-						this.sound.play('drop_valid', { volume: 0.6 });
-						this.game.events.emit('scorePoint', { color: ball.color });
+						this.scene.sound.play('drop_valid', { volume: 0.6 });
+						this.scene.game.events.emit('scorePoint', { color: ball.color });
 						this.fadeAndDestroyBall(ball);
 					} else {
-						// --- WRONG GOAL ---
-						this.sound.play('drop_invalid', { volume: 0.6 });
+						this.scene.sound.play('drop_invalid', { volume: 0.6 });
 						this.fadeAndDestroyBall(ball);
 					}
 				}
 			} else if (isValidDrop) {
-				// --- VALID DROP (in play area) ---
-				this.sound.play('drop', { volume: 0.6 });
+				this.scene.sound.play('drop', { volume: 0.6 });
 				gameObject.setStatic(false);
 				gameObject.setVelocity(pointer.velocity.x / 5, pointer.velocity.y / 5);
 			} else {
-				// --- INVALID DROP (outside all areas) ---
-				this.sound.play('drop_invalid', { volume: 0.6 });
+				this.scene.sound.play('drop_invalid', { volume: 0.6 });
 				if (gameObject.active) {
 					this.fadeAndDestroyBall(gameObject);
 				}
 			}
 		});
 		
-		this.scale.on('resize', (gameSize) => {
-			this.cameras.main.setViewport(
-				this.boardViewScene.cameras.main.x,
-				this.boardViewScene.cameras.main.y,
-				this.boardViewScene.cameras.main.width,
-				this.boardViewScene.cameras.main.height
-			);
-		}, this);
+		// MODIFICATION: The resize listener is removed, as it's handled by the main GameScene.
 	}
 	
 	update(time, delta) {
@@ -154,7 +122,8 @@ class BallScene extends Phaser.Scene {
 	createWallsFromPolygon() {
 		this.walls.clear(true, true);
 		
-		const playArea = this.boardViewScene.playArea;
+		// MODIFICATION: Use this.boardView to get play area info.
+		const playArea = this.boardView.playArea;
 		if (!playArea || !playArea.center || !playArea.vertices || playArea.vertices.length < 2) {
 			console.warn('Cannot create walls, playArea data is invalid.');
 			return;
@@ -175,9 +144,10 @@ class BallScene extends Phaser.Scene {
 			const centerX = (p1_world.x + p2_world.x) / 2;
 			const centerY = (p1_world.y + p2_world.y) / 2;
 			
-			const wallSegmentGO = this.add.rectangle(centerX, centerY, length, wallThickness);
+			// MODIFICATION: Use this.scene to add game objects.
+			const wallSegmentGO = this.scene.add.rectangle(centerX, centerY, length, wallThickness);
 			
-			this.matter.add.gameObject(wallSegmentGO, {
+			this.scene.matter.add.gameObject(wallSegmentGO, {
 				isStatic: true,
 				restitution: 0.5,
 				friction: 0.1
@@ -191,22 +161,25 @@ class BallScene extends Phaser.Scene {
 	
 	spawnBall() {
 		if (this.balls.countActive(true) >= this.ballConfig.maxBalls || this.ballConfig.colors.length === 0) { return; }
-		if (!this.boardViewScene.playAreaPolygon) {
-			this.time.delayedCall(50, this.spawnBall, [], this);
+		// MODIFICATION: Use this.boardView to get play area info.
+		if (!this.boardView.playAreaPolygon) {
+			this.scene.time.delayedCall(50, this.spawnBall, [], this);
 			return;
 		}
-		const targetPoint = this.getRandomPointInPolygon(this.boardViewScene.playAreaPolygon);
+		const targetPoint = this.getRandomPointInPolygon(this.boardView.playAreaPolygon);
 		if (!targetPoint) {
 			console.warn('Could not find a valid spawn point in the polygon.');
 			return;
 		}
 		const spawnX = targetPoint.x;
-		const spawnY = this.cameras.main.worldView.y - 50;
+		// MODIFICATION: Spawn above the visible screen area (y=0).
+		const spawnY = -50;
 		const colorIndex = Phaser.Math.Between(0, this.ballConfig.colors.length - 1);
 		const textureKey = `ball_${colorIndex}`;
 		const ballColor = this.ballConfig.colors[colorIndex];
 		
-		const ball = this.matter.add.image(spawnX, spawnY, textureKey, null, {
+		// MODIFICATION: Use this.scene.matter to add physics objects.
+		const ball = this.scene.matter.add.image(spawnX, spawnY, textureKey, null, {
 			shape: { type: 'circle', radius: this.ballConfig.pixelSize },
 			restitution: this.ballConfig.restitution,
 			frictionAir: this.ballConfig.frictionAir,
@@ -218,20 +191,20 @@ class BallScene extends Phaser.Scene {
 		ball.setScale(this.ballConfig.initialSize);
 		ball.setOrigin(0.5, 0.5);
 		ball.setStatic(true);
-		this.input.setDraggable(ball.setInteractive());
+		this.scene.input.setDraggable(ball.setInteractive());
 		
-		this.tweens.add({
+		// MODIFICATION: Use this.scene.tweens.
+		this.scene.tweens.add({
 			targets: ball,
 			y: targetPoint.y,
 			scale: this.ballConfig.finalSize,
 			duration: this.ballConfig.dropDuration,
 			ease: 'Bounce.easeOut',
 			onStart: () => {
-				this.sound.play('drop', { volume: 0.7 });
+				this.scene.sound.play('drop', { volume: 0.7 });
 			},
 			onComplete: () => {
 				if (!ball.active) return;
-				
 				
 				ball.setStatic(false);
 				
@@ -243,7 +216,7 @@ class BallScene extends Phaser.Scene {
 				
 				ball.setVelocity(velocityX, velocityY);
 				
-				ball.lifespanTimer = this.time.delayedCall(this.ballConfig.lifespan, this.fadeAndDestroyBall, [ball], this);
+				ball.lifespanTimer = this.scene.time.delayedCall(this.ballConfig.lifespan, this.fadeAndDestroyBall, [ball], this);
 			}
 		});
 	}
@@ -254,11 +227,12 @@ class BallScene extends Phaser.Scene {
 			const size = this.ballConfig.pixelSize * 2;
 			const radius = size / 2;
 			
-			if (this.textures.exists(textureKey)) {
-				this.textures.remove(textureKey);
+			// MODIFICATION: Use this.scene.textures.
+			if (this.scene.textures.exists(textureKey)) {
+				this.scene.textures.remove(textureKey);
 			}
 			
-			const canvas = this.textures.createCanvas(textureKey, size, size);
+			const canvas = this.scene.textures.createCanvas(textureKey, size, size);
 			if (!canvas) return;
 			const ctx = canvas.getContext();
 			
@@ -293,7 +267,7 @@ class BallScene extends Phaser.Scene {
 	resetBalls() {
 		this.balls.getChildren().forEach(ball => {
 			if (ball.lifespanTimer) ball.lifespanTimer.remove();
-			this.tweens.killTweensOf(ball);
+			this.scene.tweens.killTweensOf(ball);
 		});
 		this.balls.clear(true, true);
 		
@@ -301,7 +275,7 @@ class BallScene extends Phaser.Scene {
 		for (let i = 0; i < this.ballConfig.maxBalls; i++) {
 			const delay = Phaser.Math.Between(1000, 2000);
 			ball_delay += delay;
-			this.time.delayedCall(ball_delay, () => {
+			this.scene.time.delayedCall(ball_delay, () => {
 				this.spawnBall();
 			});
 		}
@@ -311,14 +285,14 @@ class BallScene extends Phaser.Scene {
 		if (!ball.active) return;
 		ball.setActive(false);
 		
-		this.tweens.add({
+		this.scene.tweens.add({
 			targets: ball,
 			alpha: 0,
 			duration: this.ballConfig.fadeDuration,
 			ease: 'Power2',
 			onComplete: () => {
 				this.balls.remove(ball, true, true);
-				this.time.delayedCall(this.ballConfig.respawnDelay, this.spawnBall, [], this);
+				this.scene.time.delayedCall(this.ballConfig.respawnDelay, this.spawnBall, [], this);
 			}
 		});
 	}

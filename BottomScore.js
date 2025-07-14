@@ -1,7 +1,9 @@
-// --- Scene 5: The Bottom Score Bars ---
-class BottomScoreScene extends Phaser.Scene {
-	constructor() {
-		super({ key: 'BottomScoreScene', active: true });
+// --- The Bottom Score Bars Manager ---
+// MODIFICATION: This class no longer extends Phaser.Scene. It's a manager class.
+class BottomScore {
+	// MODIFICATION: The constructor now accepts the main scene.
+	constructor(scene) {
+		this.scene = scene; // Store a reference to the main scene.
 		
 		this.scores = {};
 		this.scoreConfig = {
@@ -9,12 +11,10 @@ class BottomScoreScene extends Phaser.Scene {
 			goals: []
 		};
 		
-		// UI elements for the individual progress bars.
 		this.individualProgressBorders = null;
 		this.individualProgressFills = null;
 		this.individualScoreTexts = [];
 		
-		// Get configuration from the central config file.
 		const sharedConfig = GAME_CONFIG.Shared;
 		const scoreScenesConfig = GAME_CONFIG.ScoreScenes;
 		
@@ -23,41 +23,25 @@ class BottomScoreScene extends Phaser.Scene {
 		this.SELECTOR_SCREEN_WIDTH = sharedConfig.SELECTOR_SCREEN_WIDTH;
 	}
 	
-	create() {
-		console.log('BottomScoreScene: create()');
+	// MODIFICATION: create() is renamed to init() to be called by the main scene.
+	init() {
+		console.log('BottomScore: init()');
 		
-		this.cameras.main.setPostPipeline('Scanline');
-		
-		// Position this scene's camera at the bottom of the screen.
-		this.cameras.main.setViewport(
-			this.SELECTOR_SCREEN_WIDTH,
-			this.scale.height - this.BOTTOM_SCORE_SCREEN_HEIGHT, // Position at bottom.
-			this.scale.width - this.SELECTOR_SCREEN_WIDTH,
-			this.BOTTOM_SCORE_SCREEN_HEIGHT
-		);
+		// MODIFICATION: No camera or viewport setup needed.
 		
 		this.createIndividualProgressBarsUI();
 		
-		// Listen for events to update the score.
-		this.game.events.on('boardConfigurationChanged', this.handleBoardChange, this);
-		this.game.events.on('scorePoint', this.addScore, this);
+		this.scene.game.events.on('boardConfigurationChanged', this.handleBoardChange, this);
+		this.scene.game.events.on('scorePoint', this.addScore, this);
 		
-		// Handle resizing.
-		this.scale.on('resize', this.handleResize, this);
+		// MODIFICATION: The resize listener is removed, as it's handled by the main GameScene.
 	}
 	
-	/**
-	 * Creates persistent graphics objects for the individual score bars.
-	 */
 	createIndividualProgressBarsUI() {
-		this.individualProgressBorders = this.add.graphics();
-		this.individualProgressFills = this.add.graphics();
+		this.individualProgressBorders = this.scene.add.graphics();
+		this.individualProgressFills = this.scene.add.graphics();
 	}
 	
-	/**
-	 * Resets scores when the board configuration changes.
-	 * @param {object} config - The new board configuration.
-	 */
 	handleBoardChange(config) {
 		this.scoreConfig.colors = config.colors;
 		this.scoreConfig.goals = config.goals;
@@ -68,10 +52,6 @@ class BottomScoreScene extends Phaser.Scene {
 		this.drawScoreboard();
 	}
 	
-	/**
-	 * Increments the score for a given color and redraws the UI.
-	 * @param {object} data - The score data, containing the color.
-	 */
 	addScore(data) {
 		const color = data.color;
 		if (this.scores[color] !== undefined) {
@@ -80,9 +60,6 @@ class BottomScoreScene extends Phaser.Scene {
 		}
 	}
 	
-	/**
-	 * Redraws all the individual progress bars.
-	 */
 	drawScoreboard() {
 		this.individualProgressBorders.clear();
 		this.individualProgressFills.clear();
@@ -93,8 +70,14 @@ class BottomScoreScene extends Phaser.Scene {
 			return;
 		}
 		
+		// MODIFICATION: Calculate positions based on the full screen dimensions.
+		const areaX = this.SELECTOR_SCREEN_WIDTH;
+		const areaY = this.scene.scale.height - this.BOTTOM_SCORE_SCREEN_HEIGHT;
+		const areaWidth = this.scene.scale.width - areaX;
+		const areaHeight = this.BOTTOM_SCORE_SCREEN_HEIGHT;
+		
 		const numScores = this.scoreConfig.goals.length;
-		const slotWidth = this.cameras.main.width / numScores;
+		const slotWidth = areaWidth / numScores;
 		const textStyle = { font: '12px monospace', fill: '#000000', align: 'center' };
 		
 		const sortedGoals = [...this.scoreConfig.goals].sort((a, b) => a.side - b.side);
@@ -104,10 +87,10 @@ class BottomScoreScene extends Phaser.Scene {
 			const score = this.scores[color] || 0;
 			const individualProgress = Math.min(score / this.INDIVIDUAL_MAX_SCORE, 1.0);
 			
-			const barHeight = this.cameras.main.height * 0.4;
-			const barY = this.cameras.main.height / 2 - barHeight / 2;
+			const barHeight = areaHeight * 0.4;
+			const barY = areaY + areaHeight / 2 - barHeight / 2;
 			const barWidth = slotWidth * 0.8;
-			const barX = (slotWidth * index) + (slotWidth * 0.1);
+			const barX = areaX + (slotWidth * index) + (slotWidth * 0.1);
 			
 			this.individualProgressBorders.lineStyle(1, 0xFFFFFF, 0.8);
 			this.individualProgressBorders.strokeRect(barX, barY, barWidth, barHeight);
@@ -117,7 +100,7 @@ class BottomScoreScene extends Phaser.Scene {
 			this.individualProgressFills.fillStyle(fillColor, 1.0);
 			this.individualProgressFills.fillRect(barX, barY, fillWidth, barHeight);
 			
-			const scoreText = this.add.text(
+			const scoreText = this.scene.add.text(
 				barX + barWidth / 2,
 				barY + barHeight / 2,
 				`${score}/${this.INDIVIDUAL_MAX_SCORE}`,
@@ -129,17 +112,8 @@ class BottomScoreScene extends Phaser.Scene {
 		});
 	}
 	
-	/**
-	 * Handles game window resizing.
-	 * @param {Phaser.Structs.Size} gameSize - The new size of the game.
-	 */
 	handleResize(gameSize) {
-		this.cameras.main.setViewport(
-			this.SELECTOR_SCREEN_WIDTH,
-			gameSize.height - this.BOTTOM_SCORE_SCREEN_HEIGHT,
-			gameSize.width - this.SELECTOR_SCREEN_WIDTH,
-			this.BOTTOM_SCORE_SCREEN_HEIGHT
-		);
+		// MODIFICATION: No viewport to set, just redraw the scoreboard in its new position.
 		this.drawScoreboard();
 	}
 }

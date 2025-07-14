@@ -1,18 +1,16 @@
-// --- Scene 1: The Top Selector Bar ---
-class BoardSetupScene extends Phaser.Scene {
-	constructor() {
-		super({ key: 'BoardSetupScene', active: true });
+// --- The Top Selector Bar Manager ---
+// MODIFICATION: This class no longer extends Phaser.Scene. It's a manager class.
+class BoardSetup {
+	// MODIFICATION: The constructor now accepts the main scene.
+	constructor(scene) {
+		this.scene = scene; // Store a reference to the main scene.
 		this.currentSides = 3;
 		this.hoveredIndex = -1;
 		this.justClickedIndex = -1;
 		
-		// --- Configuration updated for vertical layout ---
 		this.PIXEL_SCALE = GAME_CONFIG.Shared.PIXEL_SCALE;
-		// The width of the selector bar in screen pixels.
 		this.SELECTOR_SCREEN_WIDTH = GAME_CONFIG.Shared.SELECTOR_SCREEN_WIDTH;
-		// The width of the selector bar's internal canvas in its own pixels.
 		this.SELECTOR_PIXEL_WIDTH = GAME_CONFIG.BoardSetupScene.SELECTOR_PIXEL_WIDTH;
-		// The height of each icon slot in its own pixels.
 		this.SLOT_PIXEL_HEIGHT = GAME_CONFIG.BoardSetupScene.SLOT_PIXEL_HEIGHT;
 		this.NUM_ICONS = GAME_CONFIG.BoardSetupScene.NUM_ICONS;
 		this.BALL_COLORS = GAME_CONFIG.Shared.BALL_COLORS;
@@ -20,16 +18,13 @@ class BoardSetupScene extends Phaser.Scene {
 		this.selectorHitArea = null;
 	}
 	
-	create() {
-		console.log("BoardSetupScene: create()");
-		this.cameras.main.setPostPipeline('Scanline');
+	// MODIFICATION: create() is renamed to init() to be called by the main scene.
+	init() {
+		console.log('BoardSetup: init()');
 		
-		// --- Viewport set to the left side of the screen ---
-		this.cameras.main.setViewport(0, 0, this.SELECTOR_SCREEN_WIDTH, this.scale.height);
-		// The texture is now tall and thin. Its height will be set dynamically in handleResize.
-		this.selectorTexture = this.textures.createCanvas('selectorTexture', this.SELECTOR_PIXEL_WIDTH, 1);
+		this.selectorTexture = this.scene.textures.createCanvas('selectorTexture', this.SELECTOR_PIXEL_WIDTH, 1);
 		
-		this.selectorImage = this.add.image(0, 0, 'selectorTexture')
+		this.selectorImage = this.scene.add.image(0, 0, 'selectorTexture')
 			.setOrigin(0, 0)
 			.setScale(this.PIXEL_SCALE);
 		
@@ -39,19 +34,23 @@ class BoardSetupScene extends Phaser.Scene {
 		this.selectorImage.on('pointermove', this.handlePointerMove, this);
 		this.selectorImage.on('pointerout', this.handlePointerOut, this);
 		this.selectorImage.on('pointerdown', this.handlePointerDown, this);
-		this.scale.on('resize', this.handleResize, this);
-		this.handleResize(this.scale.gameSize);
-		this.emitBoardConfiguration();
+		
+		// MODIFICATION: The initial event emission is removed from here.
+		// It will now be triggered by the main GameScene after all initialization and resizing is complete.
+		// this.emitBoardConfiguration();
 	}
 	
 	handleResize(gameSize) {
-		// --- Viewport and texture resized for a vertical bar ---
-		this.cameras.main.setViewport(0, 0, this.SELECTOR_SCREEN_WIDTH, gameSize.height);
+		// This check prevents an error if handleResize is called before init.
+		if (!this.selectorTexture) {
+			return;
+		}
+		
 		const newWidth = this.SELECTOR_PIXEL_WIDTH;
 		const newHeight = gameSize.height / this.PIXEL_SCALE;
 		this.selectorTexture.setSize(newWidth, newHeight);
 		this.selectorHitArea.setSize(newWidth, newHeight);
-		this.selectorImage.setPosition(this.cameras.main.x, this.cameras.main.y);
+		this.selectorImage.setPosition(0, 0);
 		this.drawSelectorBar();
 	}
 	
@@ -89,23 +88,17 @@ class BoardSetupScene extends Phaser.Scene {
 			this.justClickedIndex = index;
 			this.drawSelectorBar();
 			this.emitBoardConfiguration();
-			this.time.delayedCall(100, () => {
+			this.scene.time.delayedCall(100, () => {
 				this.justClickedIndex = -1;
 				this.drawSelectorBar();
 			});
 		}
 	}
 	
-	/**
-	 * Generates a unique set of colors based on the current number of sides,
-	 * assigns them to goals, and emits an event to other scenes.
-	 */
 	emitBoardConfiguration() {
-		// The master list of colors is now sourced from the centralized config file.
 		const shuffledColors = Phaser.Utils.Array.Shuffle([...this.BALL_COLORS]);
 		const selectedColors = shuffledColors.slice(0, this.currentSides);
 		
-		// Create a mapping of each side (goal) to a specific color.
 		const goals = [];
 		for (let i = 0; i < this.currentSides; i++) {
 			goals.push({
@@ -114,10 +107,10 @@ class BoardSetupScene extends Phaser.Scene {
 			});
 		}
 		
-		this.game.events.emit('boardConfigurationChanged', {
+		this.scene.game.events.emit('boardConfigurationChanged', {
 			sides: this.currentSides,
 			colors: selectedColors,
-			goals: goals // Add the new goals array to the event payload
+			goals: goals
 		});
 	}
 	
@@ -125,25 +118,20 @@ class BoardSetupScene extends Phaser.Scene {
 		const ctx = this.selectorTexture.getContext();
 		ctx.clearRect(0, 0, this.selectorTexture.width, this.selectorTexture.height);
 		const iconSize = 10;
-		// --- Drawing logic updated for a vertical column ---
 		const totalIconsHeight = this.NUM_ICONS * this.SLOT_PIXEL_HEIGHT;
 		const startY = Math.floor((this.selectorTexture.height - totalIconsHeight) / 2);
 		
 		for (let i = 0; i < this.NUM_ICONS; i++) {
 			const sides = i + 3;
-			// Center X is now fixed for the vertical bar.
 			const cx = this.SELECTOR_PIXEL_WIDTH / 2;
-			// Y position changes for each icon, creating a column.
 			const cy = startY + i * this.SLOT_PIXEL_HEIGHT + (this.SLOT_PIXEL_HEIGHT / 2);
 			const isSelected = (sides === this.currentSides);
 			const isHovered = (i === this.hoveredIndex);
 			const isClicked = (i === this.justClickedIndex);
 			
-			// --- MODIFICATION: Use standard canvas drawing for icons ---
-			ctx.fillStyle = isClicked ? '#FFFFFF' : '#000'; // Set fill for the background rectangle.
+			ctx.fillStyle = isClicked ? '#FFFFFF' : '#000';
 			ctx.strokeStyle = isSelected ? '#FFFFFF' : '#00FFFF';
 			if (isHovered) ctx.strokeStyle = '#FFFF00';
-			// The drawPixelRect function already uses standard fillRect/strokeRect, so it's fine to keep.
 			this.drawPixelRect(ctx, cx - 12, cy - 15, 24, 30, isSelected ? 2 : 1);
 			
 			let polyX = cx;
@@ -153,10 +141,8 @@ class BoardSetupScene extends Phaser.Scene {
 				polyY += Phaser.Math.Between(-1, 1);
 			}
 			
-			// Set stroke style for the polygon shape.
 			ctx.strokeStyle = isClicked ? '#000000' : '#FFFFFF';
-			ctx.lineWidth = 1; // Ensure polygon line width is 1.
-			// Call the new polygon drawing function.
+			ctx.lineWidth = 1;
 			this.drawPolygon(ctx, polyX, polyY, iconSize, sides);
 		}
 		this.selectorTexture.update();
@@ -168,20 +154,10 @@ class BoardSetupScene extends Phaser.Scene {
 		ctx.strokeRect(x, y, w, h);
 	}
 	
-	// --- MODIFICATION: New function to draw polygon outlines using standard canvas methods ---
-	/**
-	 * Draws a regular polygon outline using standard canvas path commands.
-	 * @param {CanvasRenderingContext2D} ctx - The canvas rendering context.
-	 * @param {number} cx - The center x-coordinate.
-	 * @param {number} cy - The center y-coordinate.
-	 * @param {number} radius - The radius of the polygon.
-	 * @param {number} sides - The number of sides.
-	 */
 	drawPolygon(ctx, cx, cy, radius, sides) {
 		const points = [];
 		for (let i = 0; i < sides; i++) {
 			const angle = (i / sides) * Math.PI * 2 - Math.PI / 2;
-			// Rounding points to maintain the pixel-art aesthetic.
 			points.push({ x: Math.round(cx + radius * Math.cos(angle)), y: Math.round(cy + radius * Math.sin(angle)) });
 		}
 		

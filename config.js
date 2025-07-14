@@ -9,6 +9,7 @@ const GAME_CONFIG = {
 	Shared: {
 		PIXEL_SCALE: 2,
 		SELECTOR_SCREEN_WIDTH: 100,
+		ScanLineMultiplier : 4, // the shader doesn't work well on small resolutions
 		
 		// Master list of all possible ball colors
 		BALL_COLORS: [
@@ -77,5 +78,7 @@ const GAME_CONFIG = {
 		BOTTOM_SCORE_SCREEN_HEIGHT: 60,
 		TOTAL_MAX_SCORE: 100,
 		INDIVIDUAL_MAX_SCORE: 20
-	}
+	},
+	
+	
 };
