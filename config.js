@@ -9,7 +9,7 @@ const GAME_CONFIG = {
 	Shared: {
 		PIXEL_SCALE: 2,
 		SELECTOR_SCREEN_WIDTH: 100,
-
+		
 		// Master list of all possible ball colors
 		BALL_COLORS: [
 			'#FF0000', // Red
@@ -52,8 +52,9 @@ const GAME_CONFIG = {
 		glitchConfig: {
 			stretch: { minSize: 0.4, maxSize: 1.0, minDuration: 50, maxDuration: 500, minDelay: 400, maxDelay: 2500 },
 			border: {
-				minLength: 15,
-				maxLength: 150,
+				// --- MODIFICATION: Glitch length is now defined by number of line segments ---
+				minSegmentLength: 1,
+				maxSegmentLength: 5,
 				minDuration: 300,
 				maxDuration: 1500,
 				minDelay: 100,

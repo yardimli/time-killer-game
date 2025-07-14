@@ -137,11 +137,11 @@ class BoardSetupScene extends Phaser.Scene {
 			const isHovered = (i === this.hoveredIndex);
 			const isClicked = (i === this.justClickedIndex);
 			
-			ctx.fillStyle = '#000';
+			// --- MODIFICATION: Use standard canvas drawing for icons ---
+			ctx.fillStyle = isClicked ? '#FFFFFF' : '#000'; // Set fill for the background rectangle.
 			ctx.strokeStyle = isSelected ? '#FFFFFF' : '#00FFFF';
 			if (isHovered) ctx.strokeStyle = '#FFFF00';
-			if (isClicked) ctx.fillStyle = '#FFFFFF';
-			// The rectangle is now taller than it is wide.
+			// The drawPixelRect function already uses standard fillRect/strokeRect, so it's fine to keep.
 			this.drawPixelRect(ctx, cx - 12, cy - 15, 24, 30, isSelected ? 2 : 1);
 			
 			let polyX = cx;
@@ -150,8 +150,12 @@ class BoardSetupScene extends Phaser.Scene {
 				polyX += Phaser.Math.Between(-1, 1);
 				polyY += Phaser.Math.Between(-1, 1);
 			}
-			ctx.fillStyle = isClicked ? '#000000' : '#FFFFFF';
-			this.drawPixelPolygon(ctx, polyX, polyY, iconSize, sides);
+			
+			// Set stroke style for the polygon shape.
+			ctx.strokeStyle = isClicked ? '#000000' : '#FFFFFF';
+			ctx.lineWidth = 1; // Ensure polygon line width is 1.
+			// Call the new polygon drawing function.
+			this.drawPolygon(ctx, polyX, polyY, iconSize, sides);
 		}
 		this.selectorTexture.update();
 	}
@@ -162,29 +166,29 @@ class BoardSetupScene extends Phaser.Scene {
 		ctx.strokeRect(x, y, w, h);
 	}
 	
-	drawPixelPolygon(ctx, cx, cy, radius, sides) {
+	// --- MODIFICATION: New function to draw polygon outlines using standard canvas methods ---
+	/**
+	 * Draws a regular polygon outline using standard canvas path commands.
+	 * @param {CanvasRenderingContext2D} ctx - The canvas rendering context.
+	 * @param {number} cx - The center x-coordinate.
+	 * @param {number} cy - The center y-coordinate.
+	 * @param {number} radius - The radius of the polygon.
+	 * @param {number} sides - The number of sides.
+	 */
+	drawPolygon(ctx, cx, cy, radius, sides) {
 		const points = [];
 		for (let i = 0; i < sides; i++) {
 			const angle = (i / sides) * Math.PI * 2 - Math.PI / 2;
+			// Rounding points to maintain the pixel-art aesthetic.
 			points.push({ x: Math.round(cx + radius * Math.cos(angle)), y: Math.round(cy + radius * Math.sin(angle)) });
 		}
-		for (let i = 0; i < sides; i++) {
-			const p1 = points[i];
-			const p2 = points[(i + 1) % sides];
-			this.drawPixelLine(ctx, p1.x, p1.y, p2.x, p2.y);
+		
+		ctx.beginPath();
+		ctx.moveTo(points[0].x, points[0].y);
+		for (let i = 1; i < points.length; i++) {
+			ctx.lineTo(points[i].x, points[i].y);
 		}
-	}
-	
-	drawPixelLine(ctx, x0, y0, x1, y1) {
-		const dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
-		const dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
-		let err = dx + dy;
-		while (true) {
-			ctx.fillRect(x0, y0, 1, 1);
-			if (x0 === x1 && y0 === y1) break;
-			let e2 = 2 * err;
-			if (e2 >= dy) { err += dy; x0 += sx; }
-			if (e2 <= dx) { err += dx; y0 += sy; }
-		}
+		ctx.closePath();
+		ctx.stroke();
 	}
 }

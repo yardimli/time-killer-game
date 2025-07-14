@@ -19,7 +19,8 @@ class BoardViewScene extends Phaser.Scene {
 		this.glitchConfig = config.glitchConfig;
 		this.goalConfig = config.goalConfig;
 		
-		this.borderPixels = [];
+		// --- MODIFICATION: Replaced borderPixels with borderSegments ---
+		this.borderSegments = [];
 		this.currentSides = 3;
 		this.goals = [];
 		this.goalSensors = [];
@@ -55,15 +56,11 @@ class BoardViewScene extends Phaser.Scene {
 		
 		this.boardTexture = this.textures.createCanvas('boardTexture', this.boardPixelDimension, this.boardPixelDimension);
 		
-		// --- MODIFICATION START ---
-		// Position the boardImage at the center of the camera's *view* (in world coordinates),
-		// not the center of the camera's viewport (in screen coordinates).
 		this.boardImage = this.add.image(
 			this.cameras.main.width / 2,
 			this.cameras.main.height / 2,
 			'boardTexture'
 		).setScale(this.PIXEL_SCALE).setInteractive();
-		// --- MODIFICATION END ---
 		
 		this.debugGraphics = this.add.graphics();
 		
@@ -134,7 +131,8 @@ class BoardViewScene extends Phaser.Scene {
 		this.goalSensors.forEach(sensor => this.matter.world.remove(sensor));
 		this.goalSensors = [];
 		
-		this.borderPixels = [];
+		// --- MODIFICATION: Clear segments instead of pixels ---
+		this.borderSegments = [];
 		const ctx = this.boardTexture.getContext();
 		ctx.clearRect(0, 0, this.boardPixelDimension, this.boardPixelDimension);
 		const centerX = this.boardPixelDimension / 2;
@@ -169,7 +167,8 @@ class BoardViewScene extends Phaser.Scene {
 		this.playAreaPolygon = new Phaser.Geom.Polygon(worldVertices);
 		this.createGoalSensors(centerX, centerY, radius, worldCenter);
 		
-		this.drawArena(ctx, centerX, centerY, radius, this.currentSides, '#FFFFFF', this.borderPixels);
+		// --- MODIFICATION: Pass the borderSegments array to be populated ---
+		this.drawArena(ctx, centerX, centerY, radius, this.currentSides, '#FFFFFF', this.borderSegments);
 		this.boardTexture.update();
 	}
 	
@@ -195,23 +194,25 @@ class BoardViewScene extends Phaser.Scene {
 		this.borderGlitchTimer = this.time.delayedCall(delay, this.triggerBorderGlitch, [], this);
 	}
 	
+	// --- MODIFICATION: Glitch is now based on line segments ---
 	triggerBorderGlitch() {
 		this.scheduleNextBorderGlitch();
 		
-		if (this.borderPixels.length === 0) return;
+		if (this.borderSegments.length === 0) return;
 		
 		const config = this.glitchConfig.border;
-		const glitchLength = Phaser.Math.Between(config.minLength, config.maxLength);
-		const startIndex = Phaser.Math.Between(0, this.borderPixels.length - 1);
+		// Determine how many consecutive line segments to include in the glitch.
+		const glitchLength = Phaser.Math.Between(config.minSegmentLength, config.maxSegmentLength);
+		const startIndex = Phaser.Math.Between(0, this.borderSegments.length - 1);
 		
-		const glitchedPixels = [];
+		const glitchedSegments = [];
 		for (let i = 0; i < glitchLength; i++) {
-			const pixel = this.borderPixels[(startIndex + i) % this.borderPixels.length];
-			glitchedPixels.push(pixel);
+			const segment = this.borderSegments[(startIndex + i) % this.borderSegments.length];
+			glitchedSegments.push(segment);
 		}
 		
 		const newGlitch = {
-			pixels: glitchedPixels,
+			segments: glitchedSegments, // Store segments, not pixels
 			startTime: this.time.now,
 			duration: Phaser.Math.Between(config.minDuration, config.maxDuration),
 			color: Phaser.Display.Color.ValueToColor(config.color)
@@ -220,6 +221,7 @@ class BoardViewScene extends Phaser.Scene {
 		this.activeBorderGlitches.push(newGlitch);
 	}
 	
+	// --- MODIFICATION: Renders glitches by drawing the stored line segments ---
 	updateBorderGlitches(time) {
 		this.activeBorderGlitches = this.activeBorderGlitches.filter(g => time < g.startTime + g.duration);
 		
@@ -234,6 +236,7 @@ class BoardViewScene extends Phaser.Scene {
 		const maxFitRadius = centerX - padding;
 		const radius = Math.min(calculatedRadius, maxFitRadius);
 		
+		// Redraw the base arena to clear previous glitches. Pass null to prevent repopulating the segments array.
 		this.drawArena(ctx, centerX, centerY, radius, this.currentSides, '#FFFFFF', null);
 		
 		this.activeBorderGlitches.forEach(glitch => {
@@ -248,12 +251,41 @@ class BoardViewScene extends Phaser.Scene {
 				pingPongProgress * 100
 			);
 			
-			ctx.fillStyle = Phaser.Display.Color.RGBToString(currentColor.r, currentColor.g, currentColor.b);
+			// Set the color and style for the glitch lines.
+			ctx.strokeStyle = Phaser.Display.Color.RGBToString(currentColor.r, currentColor.g, currentColor.b);
+			ctx.lineWidth = 1;
 			
-			glitch.pixels.forEach(p => {
-				ctx.fillRect(p.x, p.y, 1, 1);
-			});
+			// --- MODIFICATION: Separate segments to draw goals with dashes ---
+			const goalSegments = glitch.segments.filter(s => s.isGoal);
+			const wallSegments = glitch.segments.filter(s => !s.isGoal);
+			const { dashLength, gapLength } = this.goalConfig;
+			
+			// Draw glitched wall segments (solid lines)
+			if (wallSegments.length > 0) {
+				ctx.setLineDash([]);
+				ctx.beginPath();
+				wallSegments.forEach(segment => {
+					ctx.moveTo(segment.p1.x, segment.p1.y);
+					ctx.lineTo(segment.p2.x, segment.p2.y);
+				});
+				ctx.stroke();
+			}
+			
+			// Draw glitched goal segments (dashed lines)
+			if (goalSegments.length > 0) {
+				ctx.setLineDash([dashLength, gapLength]);
+				ctx.beginPath();
+				goalSegments.forEach(segment => {
+					ctx.moveTo(segment.p1.x, segment.p1.y);
+					ctx.lineTo(segment.p2.x, segment.p2.y);
+				});
+				ctx.stroke();
+			}
 		});
+		
+		// --- MODIFICATION: Reset line dash after drawing all glitches ---
+		// This ensures subsequent drawing operations on the canvas context are not unexpectedly dashed.
+		ctx.setLineDash([]);
 		
 		this.boardTexture.update();
 	}
@@ -268,10 +300,7 @@ class BoardViewScene extends Phaser.Scene {
 			gameSize.height - this.TOP_SCORE_SCREEN_HEIGHT - this.BOTTOM_SCORE_SCREEN_HEIGHT
 		);
 		
-		// --- MODIFICATION START ---
-		// Reposition the boardImage correctly on resize as well.
 		this.boardImage.setPosition(this.cameras.main.width / 2, this.cameras.main.height / 2);
-		// --- MODIFICATION END ---
 		
 		if (this.boardTexture) {
 			this.boardTexture.setSize(this.boardPixelDimension, this.boardPixelDimension);
@@ -289,9 +318,12 @@ class BoardViewScene extends Phaser.Scene {
 		this.boardPixelDimension = Math.floor(maxDisplaySize / this.PIXEL_SCALE);
 	}
 	
-	drawArena(ctx, cx, cy, radius, sides, color = '#FFFFFF', pixelStore = null) {
+	// --- MODIFICATION: Parameter renamed and logic added to populate the segment store ---
+	drawArena(ctx, cx, cy, radius, sides, color = '#FFFFFF', segmentStore = null) {
 		const {width: goalWidth, depth: goalDepth, chamfer, dashLength, gapLength} = this.goalConfig;
-		ctx.fillStyle = color;
+		
+		ctx.lineWidth = 1;
+		ctx.lineCap = 'round';
 		
 		const points = [];
 		for (let i = 0; i < sides; i++) {
@@ -304,7 +336,7 @@ class BoardViewScene extends Phaser.Scene {
 		
 		for (let i = 0; i < sides; i++) {
 			const goalInfo = this.goals.find(g => g.side === i);
-			const goalColor = color; //goalInfo ? goalInfo.color : color;
+			const goalColor = color; // goalInfo ? goalInfo.color : color;
 			
 			const p1 = points[i];
 			const p2 = points[(i + 1) % sides];
@@ -337,9 +369,23 @@ class BoardViewScene extends Phaser.Scene {
 				y: Math.round(midY + sideVecY * (goalWidth / 2))
 			};
 			
-			ctx.fillStyle = color;
-			this.drawPixelLine(ctx, p1.x, p1.y, post1.x, post1.y, pixelStore);
-			this.drawPixelLine(ctx, post2.x, post2.y, p2.x, p2.y, pixelStore);
+			// Draw solid wall parts
+			ctx.strokeStyle = color;
+			ctx.lineWidth = 1;
+			ctx.setLineDash([]);
+			ctx.beginPath();
+			ctx.moveTo(p1.x, p1.y);
+			ctx.lineTo(post1.x, post1.y);
+			ctx.moveTo(post2.x, post2.y);
+			ctx.lineTo(p2.x, p2.y);
+			ctx.stroke();
+			
+			// --- If a segmentStore is provided, populate it with the line segments ---
+			if (segmentStore) {
+				// MODIFICATION: Add isGoal flag to segment data.
+				segmentStore.push({ p1: p1, p2: post1, isGoal: false });
+				segmentStore.push({ p1: post2, p2: p2, isGoal: false });
+			}
 			
 			const back1 = {
 				x: Math.round(post1.x + normalX * goalDepth + sideVecX * chamfer),
@@ -350,11 +396,26 @@ class BoardViewScene extends Phaser.Scene {
 				y: Math.round(post2.y + normalY * goalDepth - sideVecY * chamfer)
 			};
 			
-			ctx.fillStyle = goalColor;
-			this.drawDashedPixelLine(ctx, post1.x, post1.y, back1.x, back1.y, dashLength, gapLength, pixelStore);
-			this.drawDashedPixelLine(ctx, back1.x, back1.y, back2.x, back2.y, dashLength, gapLength, pixelStore);
-			this.drawDashedPixelLine(ctx, back2.x, back2.y, post2.x, post2.y, dashLength, gapLength, pixelStore);
+			// Draw dashed goal parts
+			ctx.strokeStyle = goalColor;
+			ctx.setLineDash([dashLength, gapLength]);
+			ctx.beginPath();
+			ctx.moveTo(post1.x, post1.y);
+			ctx.lineTo(back1.x, back1.y);
+			ctx.lineTo(back2.x, back2.y);
+			ctx.lineTo(post2.x, post2.y);
+			ctx.stroke();
+			
+			// --- Populate segmentStore with the goal line segments ---
+			if (segmentStore) {
+				// MODIFICATION: Add isGoal flag to segment data.
+				segmentStore.push({ p1: post1, p2: back1, isGoal: true });
+				segmentStore.push({ p1: back1, p2: back2, isGoal: true });
+				segmentStore.push({ p1: back2, p2: post2, isGoal: true });
+			}
 		}
+		
+		ctx.setLineDash([]);
 	}
 	
 	createGoalSensors(cx, cy, radius, worldCenter) {
@@ -411,63 +472,6 @@ class BoardViewScene extends Phaser.Scene {
 			sensor.color = goalInfo.color;
 			
 			this.goalSensors.push(sensor);
-		}
-	}
-	
-	drawPixelLine(ctx, x0, y0, x1, y1, pixelStore) {
-		const dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
-		const dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
-		let err = dx + dy;
-		while (true) {
-			ctx.fillRect(x0, y0, 1, 1);
-			if (pixelStore) pixelStore.push({x: x0, y: y0});
-			if (x0 === x1 && y0 === y1) break;
-			let e2 = 2 * err;
-			if (e2 >= dy) {
-				err += dy;
-				x0 += sx;
-			}
-			if (e2 <= dx) {
-				err += dx;
-				y0 += sy;
-			}
-		}
-	}
-	
-	drawDashedPixelLine(ctx, x0, y0, x1, y1, dashLength, gapLength, pixelStore) {
-		const dx = Math.abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
-		const dy = -Math.abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
-		let err = dx + dy;
-		
-		let segmentCounter = 0;
-		let isDrawing = true;
-		
-		while (true) {
-			if (isDrawing) {
-				ctx.fillRect(x0, y0, 1, 1);
-				if (pixelStore) pixelStore.push({x: x0, y: y0});
-			}
-			
-			segmentCounter++;
-			
-			if (isDrawing && segmentCounter >= dashLength) {
-				segmentCounter = 0;
-				isDrawing = false;
-			} else if (!isDrawing && segmentCounter >= gapLength) {
-				segmentCounter = 0;
-				isDrawing = true;
-			}
-			
-			if (x0 === x1 && y0 === y1) break;
-			let e2 = 2 * err;
-			if (e2 >= dy) {
-				err += dy;
-				x0 += sx;
-			}
-			if (e2 <= dx) {
-				err += dx;
-				y0 += sy;
-			}
 		}
 	}
 }
