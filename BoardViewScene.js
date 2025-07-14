@@ -51,7 +51,7 @@ class BoardViewScene extends Phaser.Scene {
 		
 		this.cameras.main.setBackgroundColor(this.backgroundColor);
 		
-		this.cameras.main.setPostPipeline('Glitch');
+		this.cameras.main.setPostPipeline(['Glitch', 'Scanline']);
 		this.glitchPipeline = this.cameras.main.getPostPipeline('Glitch');
 		
 		this.boardTexture = this.textures.createCanvas('boardTexture', this.boardPixelDimension, this.boardPixelDimension);

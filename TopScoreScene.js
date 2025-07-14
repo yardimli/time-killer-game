@@ -25,6 +25,7 @@ class TopScoreScene extends Phaser.Scene {
 	
 	create() {
 		console.log('TopScoreScene: create()');
+		this.cameras.main.setPostPipeline('Scanline');
 		
 		// Position this scene's camera at the top of the screen.
 		this.cameras.main.setViewport(

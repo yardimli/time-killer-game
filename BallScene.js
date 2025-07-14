@@ -29,6 +29,8 @@ class BallScene extends Phaser.Scene {
 	
 	create() {
 		console.log('BallScene: create()');
+		this.cameras.main.setPostPipeline('Scanline');
+		
 		this.boardViewScene = this.scene.get('BoardViewScene');
 		
 		this.cameras.main.setViewport(

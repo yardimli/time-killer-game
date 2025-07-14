@@ -22,6 +22,8 @@ class BoardSetupScene extends Phaser.Scene {
 	
 	create() {
 		console.log("BoardSetupScene: create()");
+		this.cameras.main.setPostPipeline('Scanline');
+		
 		// --- Viewport set to the left side of the screen ---
 		this.cameras.main.setViewport(0, 0, this.SELECTOR_SCREEN_WIDTH, this.scale.height);
 		// The texture is now tall and thin. Its height will be set dynamically in handleResize.
