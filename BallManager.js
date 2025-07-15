@@ -217,10 +217,33 @@ class BallManager {
 					}
 				});
 			} else {
+				// --- MODIFICATION START: Handle invalid drop by returning ball to center ---
 				this.scene.sound.play('drop_invalid', {volume: 0.6});
 				if (gameObject.active) {
-					this.fadeAndDestroyBall(gameObject);
+					const center = this.boardView.playArea.center;
+					
+					// Check if the center point is available
+					if (center) {
+						gameObject.setStatic(true); // Prevent physics during the tween
+						this.scene.tweens.add({
+							targets: gameObject,
+							x: center.x,
+							y: center.y,
+							scale: this.ballConfig.finalSize, // Also restore scale
+							duration: 500, // A slightly longer duration to show travel
+							ease: 'Power2',
+							onComplete: () => {
+								if (gameObject.active) {
+									gameObject.setStatic(false); // Re-enable physics
+								}
+							}
+						});
+					} else {
+						// Fallback to the old behavior if center isn't found
+						this.fadeAndDestroyBall(gameObject);
+					}
 				}
+				// --- MODIFICATION END ---
 			}
 		});
 		// --- MODIFICATION END ---
