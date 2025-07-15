@@ -28,6 +28,11 @@ class BottomScore {
 		this.MAX_ROWS = 4; // 20 balls total = 4 rows of 5
 		this.BALL_H_PADDING = 30; // Horizontal padding between balls
 		this.BALL_V_PADDING = 5; // Vertical padding between balls
+		
+		// Progress bar rectangle configuration
+		this.PROGRESS_RECT_WIDTH = 3; // Width of each progress rectangle
+		this.PROGRESS_RECT_PADDING = 2; // Padding between rectangles
+		this.PROGRESS_ANIMATION_DELAY = 50; // Delay between each rectangle animation in ms
 	}
 	
 	init() {
@@ -95,7 +100,8 @@ class BottomScore {
 		
 		const numScores = this.scoreConfig.goals.length;
 		const slotWidth = areaWidth / numScores;
-		const textStyle = { font: '12px monospace', fill: '#000000', align: 'center' };
+		// The text will be inside the bar, so white text with a dark stroke is better for contrast.
+		const textStyle = { font: '20px monospace', fill: '#FFFFFF', align: 'left' };
 		
 		const sortedGoals = [...this.scoreConfig.goals].sort((a, b) => a.side - b.side);
 		
@@ -113,14 +119,32 @@ class BottomScore {
 			const barBackground = this.scene.add.rectangle(0, 0, barWidth, barHeight, 0x222222)
 				.setStrokeStyle(2, 0xFFFFFF);
 			
-			// Progress fill - initially empty
-			const progressFill = this.scene.add.rectangle(
-				-barWidth/2,
-				0,
-				0,
-				barHeight,
-				Phaser.Display.Color.HexStringToColor(color).color
-			).setOrigin(0, 0.5);
+			// Container for progress rectangles
+			const progressContainer = this.scene.add.container(0, 0);
+			
+			// Calculate how many rectangles we can fit
+			const availableWidth = barWidth - (2 * this.PROGRESS_RECT_PADDING);
+			const rectTotalWidth = this.PROGRESS_RECT_WIDTH + this.PROGRESS_RECT_PADDING;
+			const maxRectangles = Math.floor(availableWidth / rectTotalWidth);
+			
+			// Store rectangles for later animation
+			const progressRectangles = [];
+			const startX = -barWidth / 2 + this.PROGRESS_RECT_PADDING + (this.PROGRESS_RECT_WIDTH / 2);
+			
+			for (let i = 0; i < maxRectangles; i++) {
+				const rectX = startX + (i * rectTotalWidth);
+				const rect = this.scene.add.rectangle(
+					rectX,
+					0,
+					this.PROGRESS_RECT_WIDTH,
+					barHeight - 8, // Slightly smaller than bar height
+					Phaser.Display.Color.HexStringToColor(color).color
+				);
+				rect.setScale(0, 1); // Start with 0 width for animation
+				rect.setAlpha(0);
+				progressContainer.add(rect);
+				progressRectangles.push(rect);
+			}
 			
 			// Calculate drawer dimensions to fit 4 rows of 5 balls with padding
 			const totalBallHSpace = (barWidth - this.BALL_H_PADDING) / this.BALLS_PER_ROW;
@@ -159,22 +183,22 @@ class BottomScore {
 			const doorHeight = barHeight;
 			const doorColor = Phaser.Display.Color.HexStringToColor(color).color;
 			
-			// --- MODIFIED LINES START ---
 			const doorLeft = this.scene.add.rectangle(-barWidth / 2, 0, doorWidth, doorHeight, doorColor, 0.1)
 				.setOrigin(0, 0.5).setStrokeStyle(1, 0xffffff).setAlpha(0);
 			const doorRight = this.scene.add.rectangle(barWidth / 2, 0, doorWidth, doorHeight, doorColor, 0.1)
 				.setOrigin(1, 0.5).setStrokeStyle(1, 0xffffff).setAlpha(0);
-			// --- MODIFIED LINES END ---
 			
-			const scoreText = this.scene.add.text(0, -barHeight/2 - 10, '', textStyle)
-				.setOrigin(0.5).setStroke('#FFFFFF', 2);
+			// Position the text inside the bar, 100px from the left edge.
+			const scoreText = this.scene.add.text(-barWidth / 2 + 100, 0, '0%', textStyle)
+				.setOrigin(0, 0.5) // Origin is left-middle for precise positioning.
+				.setStroke('#000000', 4); // Strong stroke for visibility over any color.
 			
 			// The container's add order is important for layering.
 			container.add([
 				drawerContainer,
 				drawerBackdrop,
 				barBackground,
-				progressFill,
+				progressContainer,
 				scoreText,
 				doorLeft,
 				doorRight
@@ -184,7 +208,9 @@ class BottomScore {
 			this.scoreBarUIs[color] = {
 				container: container,
 				barBackground: barBackground,
-				progressFill: progressFill,
+				progressContainer: progressContainer,
+				progressRectangles: progressRectangles,
+				maxRectangles: maxRectangles,
 				drawerContainer: drawerContainer,
 				drawerSlide: drawerSlide,
 				ballHolder: ballHolder,
@@ -203,7 +229,9 @@ class BottomScore {
 				ballHPadding: this.BALL_H_PADDING,
 				ballVPadding: this.BALL_V_PADDING,
 				totalBallHSpace: totalBallHSpace,
-				totalBallVSpace: totalBallVSpace
+				totalBallVSpace: totalBallVSpace,
+				currentPercentage: 0, // Track current displayed percentage
+				percentageTween: null // Store reference to percentage tween
 			};
 			
 			this.updateScoreBar(color);
@@ -216,9 +244,61 @@ class BottomScore {
 		
 		const score = this.scores[color] || 0;
 		
-		// Update progress bar
-		const progressWidth = (score / this.INDIVIDUAL_MAX_SCORE) * ui.barWidth;
-		ui.progressFill.width = progressWidth;
+		// Calculate target percentage
+		const targetPercentage = this.INDIVIDUAL_MAX_SCORE > 0
+			? Math.floor((score / this.INDIVIDUAL_MAX_SCORE) * 100)
+			: 0;
+		
+		// Animate percentage counter
+		if (ui.percentageTween) {
+			ui.percentageTween.stop();
+		}
+		
+		ui.percentageTween = this.scene.tweens.addCounter({
+			from: ui.currentPercentage,
+			to: targetPercentage,
+			duration: Math.abs(targetPercentage - ui.currentPercentage) * 20, // 20ms per percentage point
+			ease: 'Linear',
+			onUpdate: (tween) => {
+				const value = Math.floor(tween.getValue());
+				ui.text.setText(`${value}%`);
+			},
+			onComplete: () => {
+				ui.currentPercentage = targetPercentage;
+			}
+		});
+		
+		// Calculate how many rectangles should be visible
+		const rectanglesToShow = Math.floor((targetPercentage / 100) * ui.maxRectangles);
+		
+		// Animate rectangles
+		ui.progressRectangles.forEach((rect, index) => {
+			if (index < rectanglesToShow) {
+				// Check if this rectangle is already visible
+				if (rect.scaleX === 0) {
+					// Animate this rectangle appearing
+					this.scene.tweens.add({
+						targets: rect,
+						scaleX: 1,
+						alpha: 1,
+						duration: 200,
+						ease: 'Back.easeOut',
+						delay: index * this.PROGRESS_ANIMATION_DELAY
+					});
+				}
+			} else {
+				// Hide rectangles that should not be visible
+				if (rect.scaleX > 0) {
+					this.scene.tweens.add({
+						targets: rect,
+						scaleX: 0,
+						alpha: 0,
+						duration: 150,
+						ease: 'Cubic.easeIn'
+					});
+				}
+			}
+		});
 		
 		// Update balls in drawer
 		ui.ballHolder.removeAll(true);
@@ -256,8 +336,6 @@ class BottomScore {
 			
 			ui.ballHolder.add(ballGraphic);
 		}
-		
-		ui.text.setText(`${score}/${this.INDIVIDUAL_MAX_SCORE}`);
 	}
 	
 	getBarAnimationInfo(color) {

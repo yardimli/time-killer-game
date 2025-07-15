@@ -1,12 +1,13 @@
 // --- Phaser Game Configuration ---
 const config = {
 	type: Phaser.WEBGL,
-	width: '100%',
-	height: '100%',
+	width: 320,
+	height: 240,
 	scale: {
-		mode: Phaser.Scale.FIT,
-		parent: 'phaser-example'
+		mode: Phaser.Scale.RESIZE,
+		autoCenter: Phaser.Scale.CENTER_BOTH,
 	},
+	parent: 'phaser-example',
 	physics: {
 		default: 'matter',
 		matter: {

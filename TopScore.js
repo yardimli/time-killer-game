@@ -8,9 +8,14 @@ class TopScore {
 			goals: []
 		};
 		
+		// --- NEW: UI element references ---
 		this.totalProgressBar = null;
-		this.totalProgressFill = null;
+		this.totalProgressContainer = null; // New container for progress rects.
+		this.totalProgressRectangles = []; // New array for progress rects.
 		this.totalPercentageText = null;
+		this.userNameText = null;
+		this.percentageTween = null; // New reference for text tween.
+		this.currentPercentage = 0; // New tracker for current percentage.
 		
 		const sharedConfig = GAME_CONFIG.Shared;
 		const scoreScenesConfig = GAME_CONFIG.ScoreScenes;
@@ -18,50 +23,19 @@ class TopScore {
 		this.TOP_SCORE_SCREEN_HEIGHT = scoreScenesConfig.TOP_SCORE_SCREEN_HEIGHT;
 		this.TOTAL_MAX_SCORE = scoreScenesConfig.TOTAL_MAX_SCORE;
 		this.SELECTOR_SCREEN_WIDTH = sharedConfig.SELECTOR_SCREEN_WIDTH;
+		
+		// --- NEW: Configuration for progress bar rectangles, similar to BottomScore ---
+		this.PROGRESS_RECT_WIDTH = 3; // Width of each progress rectangle.
+		this.PROGRESS_RECT_PADDING = 2; // Padding between rectangles.
+		this.PROGRESS_ANIMATION_DELAY = 250; // Delay between each rectangle animation in ms (faster for total).
 	}
 	
 	init() {
 		console.log('TopScore: init()');
 		
-		this.createPixelTexture();
-		this.createTotalProgressBarUI();
-		
+		// UI is now created dynamically in drawScoreboard, called by handleBoardChange.
 		this.scene.game.events.on('boardConfigurationChanged', this.handleBoardChange, this);
 		this.scene.game.events.on('scorePoint', this.addScore, this);
-	}
-	
-	createPixelTexture() {
-		const textureKey = 'pixelFillTexture';
-		if (this.scene.textures.exists(textureKey)) {
-			return;
-		}
-		
-		const canvas = this.scene.textures.createCanvas(textureKey, 4, 4);
-		if (!canvas) return;
-		const ctx = canvas.getContext('2d');
-		
-		ctx.fillStyle = '#FFFFFF';
-		ctx.fillRect(0, 0, 4, 4);
-		
-		ctx.fillStyle = '#CCCCCC';
-		ctx.fillRect(1, 0, 1, 1);
-		ctx.fillRect(3, 1, 1, 1);
-		ctx.fillRect(0, 2, 1, 1);
-		ctx.fillRect(2, 3, 1, 1);
-		
-		canvas.refresh();
-	}
-	
-	createTotalProgressBarUI() {
-		this.totalProgressBar = this.scene.add.graphics();
-		this.totalProgressFill = this.scene.add.tileSprite(0, 0, 0, 0, 'pixelFillTexture');
-		this.totalPercentageText = this.scene.add.text(0, 0, '0%', {
-			font: '16px monospace',
-			fill: '#000000',
-			stroke: '#FFFFFF',
-			strokeThickness: 3,
-			align: 'center'
-		}).setOrigin(0.5);
 	}
 	
 	handleBoardChange(config) {
@@ -71,57 +45,175 @@ class TopScore {
 		this.scoreConfig.colors.forEach(color => {
 			this.scores[color] = 0;
 		});
+		
+		// Re-create the UI for the new configuration or on initial load.
 		this.drawScoreboard();
+		// Update the bar to its initial state (0%).
+		this.updateTotalScoreBar();
 	}
 	
 	addScore(data) {
 		const color = data.color;
 		if (this.scores[color] !== undefined) {
 			this.scores[color]++;
-			this.drawScoreboard();
+			// Only update the visual display, don't redraw everything.
+			this.updateTotalScoreBar();
 		}
 	}
 	
+	/**
+	 * --- MODIFIED: This method now creates all UI elements from scratch. ---
+	 * It's called on initialization and resize to ensure correct layout.
+	 */
 	drawScoreboard() {
-		this.totalProgressBar.clear();
+		// --- NEW: Clean up any old UI elements before redrawing. ---
+		if (this.totalProgressBar) this.totalProgressBar.destroy();
+		if (this.totalProgressContainer) this.totalProgressContainer.destroy();
+		if (this.totalPercentageText) this.totalPercentageText.destroy();
+		if (this.userNameText) this.userNameText.destroy();
+		this.totalProgressRectangles = [];
+		if (this.percentageTween) this.percentageTween.stop();
 		
 		if (this.scoreConfig.goals.length === 0) {
-			this.totalProgressFill.setVisible(false);
-			this.totalPercentageText.setVisible(false);
-			return;
+			return; // Don't draw if there are no goals.
 		}
-		
-		this.totalProgressFill.setVisible(true);
-		this.totalPercentageText.setVisible(true);
-		
-		const totalScore = Object.values(this.scores).reduce((sum, score) => sum + score, 0);
-		const totalProgress = Math.min(totalScore / this.TOTAL_MAX_SCORE, 1.0);
 		
 		const areaX = this.SELECTOR_SCREEN_WIDTH;
 		const areaY = 0;
 		const areaWidth = this.scene.scale.width - areaX;
 		const areaHeight = this.TOP_SCORE_SCREEN_HEIGHT;
 		
-		const barHeight = areaHeight * 0.5;
-		const barY = areaY + areaHeight / 2 - barHeight / 2;
+		const barHeight = areaHeight * 0.8;
+		const barY = areaY + areaHeight / 2;
 		const barWidth = areaWidth * 0.9;
 		const barX = areaX + (areaWidth - barWidth) / 2;
 		
-		this.totalProgressBar.lineStyle(2, 0xFFFFFF, 1);
-		this.totalProgressBar.strokeRect(barX, barY, barWidth, barHeight);
+		// --- NEW: Create UI elements similar to BottomScore. ---
+		// The main bar background.
+		this.totalProgressBar = this.scene.add.rectangle(barX + barWidth / 2, barY, barWidth, barHeight, 0x111111)
+			.setStrokeStyle(2, 0xFFFFFF);
 		
-		const fillWidth = barWidth * totalProgress;
-		this.totalProgressFill
-			.setSize(fillWidth, barHeight)
-			.setPosition(barX + barWidth, barY + barHeight / 2)
-			.setOrigin(1, 0.5);
+		// Container for progress rectangles.
+		this.totalProgressContainer = this.scene.add.container(barX + barWidth / 2, barY);
 		
-		this.totalPercentageText
-			.setText(`${Math.floor(totalProgress * 100)}%`)
-			.setPosition(barX + barWidth / 2, barY + barHeight / 2);
+		// Calculate how many rectangles we can fit.
+		const availableWidth = barWidth - (2 * this.PROGRESS_RECT_PADDING);
+		const rectTotalWidth = this.PROGRESS_RECT_WIDTH + this.PROGRESS_RECT_PADDING;
+		const maxRectangles = Math.floor(availableWidth / rectTotalWidth);
+		this.maxRectangles = maxRectangles; // Store for update logic.
+		
+		// The starting X position is now on the right side of the bar.
+		const startRectX = barWidth / 2 - this.PROGRESS_RECT_PADDING - (this.PROGRESS_RECT_WIDTH / 2);
+		for (let i = 0; i < maxRectangles; i++) {
+			// We subtract from the starting position to place subsequent rectangles to the left.
+			const rectX = startRectX - (i * rectTotalWidth);
+			const rect = this.scene.add.rectangle(
+				rectX,
+				0,
+				this.PROGRESS_RECT_WIDTH,
+				barHeight - 8, // Slightly smaller than bar height.
+				0xDDDDDD // A neutral light grey color for the total bar.
+			);
+			rect.setScale(0, 1); // Start with 0 width for animation.
+			rect.setAlpha(0);
+			this.totalProgressContainer.add(rect);
+			this.totalProgressRectangles.push(rect); // The array is now ordered right-to-left.
+		}
+		
+		// Create username text.
+		this.userNameText = this.scene.add.text(barX + 100, barY, 'Ege', {
+			font: '28px monospace',
+			fill: '#FFFFFF',
+			stroke: '#000000',
+			strokeThickness: 4,
+			align: 'center'
+		}).setOrigin(0.5);
+		
+		// Create the percentage text.
+		this.totalPercentageText = this.scene.add.text(barX + barWidth - 300, barY, '0% Complete', {
+			font: '28px monospace',
+			fill: '#000000',
+			stroke: '#FFFFFF',
+			strokeThickness: 4,
+			align: 'center'
+		}).setOrigin(0.5);
+		
+		// Reset animation state trackers.
+		this.currentPercentage = 0;
+		this.percentageTween = null;
+	}
+	
+	/**
+	 * --- NEW: This method handles score updates and animations. ---
+	 * It animates the percentage text and the progress bar rectangles.
+	 */
+	updateTotalScoreBar() {
+		if (!this.totalProgressRectangles || this.totalProgressRectangles.length === 0) {
+			return; // UI not ready.
+		}
+		
+		const totalScore = Object.values(this.scores).reduce((sum, score) => sum + score, 0);
+		const targetPercentage = this.TOTAL_MAX_SCORE > 0
+			? Math.floor((totalScore / this.TOTAL_MAX_SCORE) * 100)
+			: 0;
+		
+		// Animate percentage counter.
+		if (this.percentageTween) {
+			this.percentageTween.stop();
+		}
+		
+		this.percentageTween = this.scene.tweens.addCounter({
+			from: this.currentPercentage,
+			to: targetPercentage,
+			duration: Math.abs(targetPercentage - this.currentPercentage) * 20, // 20ms per percentage point.
+			ease: 'Linear',
+			onUpdate: (tween) => {
+				const value = Math.floor(tween.getValue());
+				if (this.totalPercentageText) {
+					this.totalPercentageText.setText(`${value}% Complete`);
+				}
+			},
+			onComplete: () => {
+				this.currentPercentage = targetPercentage;
+			}
+		});
+		
+		// Calculate how many rectangles should be visible.
+		const rectanglesToShow = Math.floor((targetPercentage / 100) * this.maxRectangles);
+		
+		// Animate rectangles. Because the array is now ordered right-to-left,
+		// this loop will animate the fill from right to left automatically.
+		this.totalProgressRectangles.forEach((rect, index) => {
+			if (index < rectanglesToShow) {
+				// Animate this rectangle appearing if it's not already visible.
+				if (rect.scaleX === 0) {
+					this.scene.tweens.add({
+						targets: rect,
+						scaleX: 1,
+						alpha: 1,
+						duration: 200,
+						ease: 'Back.easeOut',
+						delay: index * this.PROGRESS_ANIMATION_DELAY
+					});
+				}
+			} else {
+				// Hide rectangles that should not be visible.
+				if (rect.scaleX > 0) {
+					this.scene.tweens.add({
+						targets: rect,
+						scaleX: 0,
+						alpha: 0,
+						duration: 150,
+						ease: 'Cubic.easeIn'
+					});
+				}
+			}
+		});
 	}
 	
 	handleResize(gameSize) {
 		this.drawScoreboard();
+		// --- NEW: After redrawing, update the bar to reflect the current score. ---
+		this.updateTotalScoreBar();
 	}
 }
