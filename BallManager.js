@@ -289,35 +289,23 @@ class BallManager {
 		});
 	}
 	
-	/**
-	 * Creates the physical walls for the arena based on the detailed border segments
-	 * from the BoardView. This method intelligently skips creating walls for segments
-	 * marked as goals, leaving physical openings that balls can pass through.
-	 */
 	createWallsFromPolygon() {
 		this.walls.clear(true, true);
 		
-		// Get the border segments calculated by BoardView. These define the walls and goal openings.
 		const borderSegments = this.boardView.borderSegments;
-		// Get the BoardView's image object to calculate world coordinates.
 		const boardImage = this.boardView.boardImage;
-		// Get the dimensions and scale for coordinate conversion.
 		const boardPixelDimension = this.boardView.boardPixelDimension;
 		const pixelScale = this.boardView.PIXEL_SCALE;
 		
-		// Check if the necessary data is available.
 		if (!borderSegments || borderSegments.length === 0 || !boardImage) {
 			console.warn('Cannot create walls, border segment data is not ready.');
 			return;
 		}
 		
-		const wallThickness = 10; // Thickness of the physics bodies for the walls.
+		const wallThickness = 10;
 		const textureCenter = {x: boardPixelDimension / 2, y: boardPixelDimension / 2};
 		
-		// Iterate over each segment defined in BoardView.
 		borderSegments.forEach(segment => {
-			
-			// Convert the segment's start and end points from texture coordinates to world coordinates.
 			const p1_world = {
 				x: boardImage.x + (segment.p1.x - textureCenter.x) * pixelScale,
 				y: boardImage.y + (segment.p1.y - textureCenter.y) * pixelScale
@@ -327,45 +315,43 @@ class BallManager {
 				y: boardImage.y + (segment.p2.y - textureCenter.y) * pixelScale
 			};
 			
-			// Calculate properties for the Matter.js rectangle (wall segment).
 			const length = Phaser.Math.Distance.BetweenPoints(p1_world, p2_world);
 			const angle = Phaser.Math.Angle.BetweenPoints(p1_world, p2_world);
 			const centerX = (p1_world.x + p2_world.x) / 2;
 			const centerY = (p1_world.y + p2_world.y) / 2;
 			
-			// Create a rectangle to represent the wall segment.
 			const wallSegmentGO = this.scene.add.rectangle(centerX, centerY, length, wallThickness);
 			
-			// Add the rectangle to the Matter.js physics world as a static body.
 			this.scene.matter.add.gameObject(wallSegmentGO, {
 				isStatic: true,
 				restitution: 0.5,
 				friction: 0.1
 			});
 			
-			// Set the rotation and hide the visual representation of the physics body.
 			wallSegmentGO.setRotation(angle);
-			wallSegmentGO.setVisible(false); // The visual wall is drawn on the boardTexture.
+			wallSegmentGO.setVisible(false);
 			this.walls.add(wallSegmentGO);
 		});
 	}
-	// --- MODIFICATION END ---
 	
+	// --- MODIFICATION START ---
 	spawnBall() {
 		if (this.balls.countActive(true) >= this.ballConfig.maxBalls || this.ballConfig.colors.length === 0) {
 			return;
 		}
-		if (!this.boardView.playAreaPolygon) {
+		
+		// Check if the play area and its center point are available from the BoardView.
+		if (!this.boardView.playArea || !this.boardView.playArea.center) {
+			// If not ready, wait a moment and try to spawn again.
 			this.scene.time.delayedCall(50, this.spawnBall, [], this);
 			return;
 		}
-		const targetPoint = this.getRandomPointInPolygon(this.boardView.playAreaPolygon);
-		if (!targetPoint) {
-			console.warn('Could not find a valid spawn point in the polygon.');
-			return;
-		}
+		
+		// Always use the center of the arena as the target drop point.
+		const targetPoint = this.boardView.playArea.center;
+		
 		const spawnX = targetPoint.x;
-		const spawnY = -50;
+		const spawnY = -50; // Start the ball above the screen.
 		const colorIndex = Phaser.Math.Between(0, this.ballConfig.colors.length - 1);
 		const textureKey = `ball_${colorIndex}`;
 		const ballColor = this.ballConfig.colors[colorIndex];
@@ -385,6 +371,7 @@ class BallManager {
 		ball.setStatic(true);
 		this.scene.input.setDraggable(ball.setInteractive());
 		
+		// Animate the ball dropping into the center.
 		this.scene.tweens.add({
 			targets: ball,
 			y: targetPoint.y,
@@ -399,6 +386,7 @@ class BallManager {
 				
 				ball.setStatic(false);
 				
+				// Give the ball a little nudge in a random direction after it lands.
 				const initialSpeed = Phaser.Math.FloatBetween(2, 5);
 				const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
 				
@@ -411,6 +399,7 @@ class BallManager {
 			}
 		});
 	}
+	// --- MODIFICATION END ---
 	
 	createBallTextures() {
 		this.ballConfig.colors.forEach((color, index) => {
@@ -485,48 +474,5 @@ class BallManager {
 				this.scene.time.delayedCall(this.ballConfig.respawnDelay, this.spawnBall, [], this);
 			}
 		});
-	}
-	
-	getRandomPointInPolygon(polygon) {
-		if (!polygon || !polygon.points || polygon.points.length < 3) {
-			return null;
-		}
-		const vertices = polygon.points;
-		const centralVertex = vertices[0];
-		const triangles = [];
-		let totalArea = 0;
-		for (let i = 1; i < vertices.length - 1; i++) {
-			const p1 = centralVertex;
-			const p2 = vertices[i];
-			const p3 = vertices[i + 1];
-			const area = Phaser.Geom.Triangle.Area(new Phaser.Geom.Triangle(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y));
-			triangles.push({p1, p2, p3, area});
-			totalArea += area;
-		}
-		if (totalArea <= 0) {
-			return new Phaser.Geom.Point(centralVertex.x, centralVertex.y);
-		}
-		let randomArea = Math.random() * totalArea;
-		let chosenTriangle = null;
-		for (const triangle of triangles) {
-			if (randomArea < triangle.area) {
-				chosenTriangle = triangle;
-				break;
-			}
-			randomArea -= triangle.area;
-		}
-		if (!chosenTriangle) {
-			chosenTriangle = triangles[triangles.length - 1];
-		}
-		let r1 = Math.random();
-		let r2 = Math.random();
-		if (r1 + r2 > 1) {
-			r1 = 1.0 - r1;
-			r2 = 1.0 - r2;
-		}
-		const {p1, p2, p3} = chosenTriangle;
-		const x = p1.x + r1 * (p2.x - p1.x) + r2 * (p3.x - p1.x);
-		const y = p1.y + r1 * (p2.y - p1.y) + r2 * (p3.y - p1.y);
-		return new Phaser.Geom.Point(x, y);
 	}
 }
