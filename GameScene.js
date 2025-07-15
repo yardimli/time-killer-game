@@ -12,6 +12,7 @@ class GameScene extends Phaser.Scene {
 		this.ballManager = null;
 		this.topScore = null;
 		this.bottomScore = null;
+		this.customCursor = null;
 	}
 	
 	preload() {
@@ -46,6 +47,27 @@ class GameScene extends Phaser.Scene {
 			scanLineWidth: 1024
 		});
 		
+		// Create a texture for the custom cursor.
+		const cursorSize = 32; // A 32x32 cursor is about twice the size of a standard 16x16 one.
+		const cursorGraphics = this.make.graphics();
+		cursorGraphics.lineStyle(2, 0xFFFFFF, 1);
+		
+		// Draw a simple crosshair shape.
+		cursorGraphics.moveTo(cursorSize / 2, 0);
+		cursorGraphics.lineTo(cursorSize / 2, cursorSize);
+		cursorGraphics.moveTo(0, cursorSize / 2);
+		cursorGraphics.lineTo(cursorSize, cursorSize / 2);
+		cursorGraphics.strokePath();
+		
+		// Generate a texture from the graphics object and then destroy the graphics object.
+		cursorGraphics.generateTexture('customCursorTexture', cursorSize, cursorSize);
+		cursorGraphics.destroy();
+		
+		// Create the cursor sprite using the new texture.
+		this.customCursor = this.add.image(0, 0, 'customCursorTexture');
+		// Set a very high depth to ensure the cursor is always drawn on top of everything else.
+		this.customCursor.setDepth(1000);
+		
 		// Instantiate all the game logic managers.
 		this.boardView = new BoardView(this);
 		this.ballManager = new BallManager(this, this.boardView);
@@ -53,7 +75,7 @@ class GameScene extends Phaser.Scene {
 		this.topScore = new TopScore(this);
 		this.bottomScore = new BottomScore(this);
 		
-		// MODIFICATION: The initialization order is now critical.
+		// The initialization order is now critical.
 		
 		// 1. Initialize all managers to create their respective game objects.
 		this.boardView.init();
@@ -74,6 +96,11 @@ class GameScene extends Phaser.Scene {
 	}
 	
 	update(time, delta) {
+		// In each frame, update the custom cursor's position to follow the mouse pointer.
+		if (this.customCursor) {
+			this.customCursor.setPosition(this.input.activePointer.x, this.input.activePointer.y);
+		}
+		
 		// Call the update loop for each manager that needs it.
 		this.boardView.update(time, delta);
 		this.ballManager.update(time, delta);

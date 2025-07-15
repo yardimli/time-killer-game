@@ -196,11 +196,6 @@ class BoardView {
 		this.activeBorderGlitches = this.activeBorderGlitches.filter(g => time < g.startTime + g.duration);
 		
 		const ctx = this.boardTexture.getContext();
-		
-		// --- MODIFICATION START ---
-		// The previous implementation redrew the entire arena every frame, then drew the glitch
-		// effect over it. This overdraw caused visual artifacts like the disappearing dashes.
-		// The new implementation clears the canvas and draws each segment (glitched or not) exactly once.
 		ctx.clearRect(0, 0, this.boardPixelDimension, this.boardPixelDimension);
 		
 		// Create a set of all segments that are currently part of an active glitch.
@@ -283,8 +278,6 @@ class BoardView {
 				ctx.stroke();
 			}
 		});
-		// --- MODIFICATION END ---
-		
 		ctx.setLineDash([]);
 		
 		this.boardTexture.update();

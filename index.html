@@ -17,6 +17,8 @@
 		}
 		canvas {
 			display: block;
+			/* Hide the default system cursor so we can draw our own. */
+			cursor: none;
 		}
 	</style>
 </head>
@@ -28,14 +30,14 @@
 <!-- Load the centralized game configuration before the scenes that use it -->
 <script src="config.js"></script>
 
-<!-- MODIFICATION: Load manager classes first -->
+<!-- Load manager classes first -->
 <script src="BoardSetup.js"></script>
 <script src="BoardView.js"></script>
 <script src="BallManager.js"></script>
 <script src="TopScore.js"></script>
 <script src="BottomScore.js"></script>
 
-<!-- MODIFICATION: Load the new main GameScene -->
+<!-- Load the new main GameScene -->
 <script src="GameScene.js"></script>
 
 <!-- Load the main game configuration and start the game -->

@@ -17,6 +17,11 @@ class BottomScore {
 		this.BOTTOM_SCORE_SCREEN_HEIGHT = scoreScenesConfig.BOTTOM_SCORE_SCREEN_HEIGHT;
 		this.INDIVIDUAL_MAX_SCORE = scoreScenesConfig.INDIVIDUAL_MAX_SCORE;
 		this.SELECTOR_SCREEN_WIDTH = sharedConfig.SELECTOR_SCREEN_WIDTH;
+		
+		// --- NEW: Centralized animation speed control ---
+		// Change this single value to speed up or slow down the entire goal animation.
+		// Original total time was ~2000ms.
+		this.animationDuration = 2400; // Base duration in ms.
 	}
 	
 	init() {
@@ -56,6 +61,8 @@ class BottomScore {
 			this.scores[color]++;
 			
 			const ui = this.scoreBarUIs[color];
+			// Only update the visual display if an animation is not in progress.
+			// The display will be updated at the end of the animation anyway.
 			if (!ui || !ui.isAnimating) {
 				this.updateScoreBar(color);
 			}
@@ -94,186 +101,233 @@ class BottomScore {
 			const containerX = areaX + (slotWidth * index) + (slotWidth / 2);
 			const containerY = areaY + areaHeight / 2;
 			
-			// Create a container for all parts of the score bar.
 			const container = this.scene.add.container(containerX, containerY);
 			
-			// The main bar background/border.
-			const drawer = this.scene.add.rectangle(0, 0, barWidth, barHeight, 0x000000, 0).setStrokeStyle(1, 0xFFFFFF, 0.8);
+			// Modified: The background is now a black box with a white border, representing the drawer.
+			const barBackground = this.scene.add.rectangle(0, 0, barWidth, barHeight, 0x000000).setStrokeStyle(2, 0xFFFFFF);
 			
-			// The colored fill part of the bar.
-			const fillColor = Phaser.Display.Color.HexStringToColor(color).color;
-			const fill = this.scene.add.rectangle(-(barWidth / 2), 0, 0, barHeight, fillColor).setOrigin(0, 0.5);
+			// New: This container will hold the graphics for the collected balls.
+			// It's positioned at the left edge of the bar background.
+			const ballHolder = this.scene.add.container(-(barWidth / 2), 0);
 			
-			// --- MODIFICATION START ---
-			// The doors are now two rectangles, each half the width of the bar.
-			// Their origins are set to act as hinges.
+			// This part is for the "drawer opening" animation effect.
+			const drawerSlide = this.scene.add.rectangle(0, 0, barWidth * 0.95, 1, 0x222222).setOrigin(0.5, 1).setStrokeStyle(1, Phaser.Display.Color.HexStringToColor(color).color, 0.8);
+			
 			const doorWidth = barWidth / 2;
 			const doorHeight = barHeight;
+			const doorColor = Phaser.Display.Color.HexStringToColor(color).color;
 			
-			// Left door: Its origin (pivot point) is set to its left edge (0, 0.5).
-			const doorLeft = this.scene.add.rectangle(
-				-barWidth / 2, // Positioned to cover the left half of the bar.
-				0,
-				doorWidth,
-				doorHeight,
-				0x444444 // A dark grey color for the door.
-			).setOrigin(0, 0.5).setStrokeStyle(1, 0xFFFFFF);
+			const doorLeft = this.scene.add.rectangle(-barWidth / 2, -15, doorWidth, doorHeight, doorColor).setOrigin(0, 0.5).setStrokeStyle(1, doorColor).setAlpha(0);
+			const doorRight = this.scene.add.rectangle(barWidth / 2, -15, doorWidth, doorHeight, doorColor).setOrigin(1, 0.5).setStrokeStyle(1, doorColor).setAlpha(0);
 			
-			// Right door: Its origin (pivot point) is set to its right edge (1, 0.5).
-			const doorRight = this.scene.add.rectangle(
-				barWidth / 2, // Positioned to cover the right half of the bar.
-				0,
-				doorWidth,
-				doorHeight,
-				0x444444
-			).setOrigin(1, 0.5).setStrokeStyle(1, 0xFFFFFF);
-			// --- MODIFICATION END ---
-			
-			// The score text.
 			const scoreText = this.scene.add.text(0, 0, '', textStyle).setOrigin(0.5).setStroke('#FFFFFF', 2);
 			
-			// The order in the container determines the draw order (last is on top).
-			container.add([drawer, fill, doorLeft, doorRight, scoreText]);
+			// Modified: The 'fill' rectangle is removed and 'ballHolder' is added.
+			container.add([drawerSlide, barBackground, ballHolder, scoreText, doorLeft, doorRight]);
 			
-			// Store all UI components for later access.
+			// Modified: Storing a reference to ballHolder instead of the old fill bar.
 			this.scoreBarUIs[color] = {
 				container: container,
-				drawer: drawer,
-				fill: fill,
+				barBackground: barBackground,
+				drawerSlide: drawerSlide,
+				ballHolder: ballHolder,
 				doorLeft: doorLeft,
 				doorRight: doorRight,
 				text: scoreText,
 				originalY: containerY,
+				originalX: containerX,
 				barWidth: barWidth,
+				barHeight: barHeight,
 				isAnimating: false
 			};
 			
-			// Update the bar to its initial state.
 			this.updateScoreBar(color);
 		});
 	}
 	
-	/**
-	 * Updates the visual state of a single score bar (fill width and text).
-	 * @param {string} color The hex color string of the bar to update.
-	 */
+	// Modified: This function now draws collected balls instead of a progress bar.
 	updateScoreBar(color) {
 		const ui = this.scoreBarUIs[color];
 		if (!ui) return;
 		
+		// Clear any previously drawn balls to prevent duplicates.
+		ui.ballHolder.removeAll(true);
+		
 		const score = this.scores[color] || 0;
-		const progress = Math.min(score / this.INDIVIDUAL_MAX_SCORE, 1.0);
+		// We only display up to the maximum, even if the score is higher.
+		const ballsToShow = Math.min(score, this.INDIVIDUAL_MAX_SCORE);
 		
-		// Update fill width.
-		ui.fill.width = ui.barWidth * progress;
+		// --- Calculate dimensions for the collected balls ---
+		const totalWidth = ui.barWidth;
+		const maxBalls = this.INDIVIDUAL_MAX_SCORE;
+		// The space allocated for each ball, including its margin.
+		const slotWidth = totalWidth / maxBalls;
+		// The ball's diameter is a percentage of the slot, leaving space for margins.
+		const ballDiameter = slotWidth * 0.8;
+		const ballRadius = ballDiameter / 2;
 		
-		// Update text.
+		const ballFillColor = Phaser.Display.Color.HexStringToColor(color).color;
+		const highlightColor = Phaser.Display.Color.ValueToColor(color).lighten(50);
+		
+		// --- Draw the collected balls ---
+		for (let i = 0; i < ballsToShow; i++) {
+			// Calculate the center X position for the current ball within its slot.
+			const ballX = (i * slotWidth) + (slotWidth / 2);
+			const ballY = 0; // Y is 0 because it's relative to the vertically centered ballHolder.
+			
+			// Create a graphics object for each ball.
+			const ballGraphic = this.scene.add.graphics({ x: ballX, y: ballY });
+			
+			// Draw the main ball color.
+			ballGraphic.fillStyle(ballFillColor);
+			ballGraphic.fillCircle(0, 0, ballRadius);
+			
+			// Add a simple highlight to give a 3D effect.
+			ballGraphic.fillStyle(highlightColor.color, 0.6);
+			ballGraphic.fillCircle(-ballRadius * 0.3, -ballRadius * 0.3, ballRadius * 0.4);
+			
+			// Add the new ball graphic to its container.
+			ui.ballHolder.add(ballGraphic);
+		}
+		
+		// Update the score text as before.
 		ui.text.setText(`${score}/${this.INDIVIDUAL_MAX_SCORE}`);
 	}
 	
-	/**
-	 * Provides the world coordinates for the ball to fly to during the scoring animation.
-	 * @param {string} color The hex color string of the target score bar.
-	 * @returns {{x: number, y: number}|null} The target coordinates or null if not found.
-	 */
 	getBarAnimationInfo(color) {
 		const ui = this.scoreBarUIs[color];
 		if (!ui) return null;
 		
-		// The target is the center of the container, adjusted for the "drawer out" position.
+		// The height of the drawer when it's fully extended.
+		const openDrawerHeight = ui.barWidth * 0.55;
+		
+		// The Y coordinate of the bottom of the main score bar, which is where the drawer starts.
+		const barBottomY = ui.originalY + (ui.barHeight / 2) - 100;
+		
+		// The center of the open drawer.
+		const drawerCenterX = ui.originalX; // The drawer is horizontally aligned with the bar.
+		const drawerCenterY = barBottomY; // Halfway down the extended drawer.
+		
 		return {
-			x: ui.container.x,
-			y: ui.originalY + 20 // The Y position when the drawer is extended.
+			x: drawerCenterX,
+			y: drawerCenterY
 		};
 	}
 	
-	/**
-	 * Handles the 'startGoalAnimation' event, playing the "drawer out" and "doors open" tweens.
-	 * @param {{color: string}} data The event data containing the color of the bar to animate.
-	 */
+	_createDoorUpdateHandler() {
+		return (tween, target) => {
+			const absAngle = Math.abs(target.angle);
+			let scaleFactor = 1;
+			
+			if (absAngle <= 90) {
+				scaleFactor = Math.cos(Phaser.Math.DegToRad(absAngle));
+			} else {
+				const maxAngle = 110;
+				const anglePast90 = absAngle - 90;
+				const progress = anglePast90 / (maxAngle - 90);
+				scaleFactor = Math.sin(Phaser.Math.DegToRad(progress * 90));
+			}
+			
+			target.scaleY = scaleFactor;
+		};
+	}
+	
 	handleStartGoalAnimation({ color }) {
 		const ui = this.scoreBarUIs[color];
 		if (!ui || ui.isAnimating) return;
 		
 		ui.isAnimating = true;
 		
+		const onDoorUpdate = this._createDoorUpdateHandler();
+		
 		const timeline = this.scene.add.timeline([
 			{
-				at: 0, // Start immediately
-				tween: {
-					// 1. Drawer extends downwards.
-					targets: ui.container,
-					y: ui.originalY + 20,
-					duration: 200,
-					ease: 'Cubic.easeOut'
-				}
-			},
-			// --- MODIFICATION START ---
-			// The door tweens now animate the 'angle' property to create a swinging effect.
-			{
-				at: 200, // Start after the drawer moves.
+				at: 0, // Doors start opening immediately.
 				tween: {
 					targets: ui.doorLeft,
-					angle: -110, // Swing counter-clockwise by 110 degrees.
+					angle: -110,
 					ease: 'Cubic.easeOut',
-					duration: 400
+					duration: this.animationDuration * 0.6, // Doors take 60% of the total time to swing.
+					onUpdate: onDoorUpdate
 				}
 			},
 			{
-				at: 200, // Start at the same time as the left door.
+				at: 0, // Right door opens simultaneously.
 				tween: {
 					targets: ui.doorRight,
-					angle: 110, // Swing clockwise by 110 degrees.
+					angle: 110,
 					ease: 'Cubic.easeOut',
-					duration: 400
+					duration: this.animationDuration * 0.6,
+					onUpdate: onDoorUpdate
+				}
+			},
+			{
+				at: 0, // Doors fade in quickly at the start.
+				tween: {
+					targets: [ui.doorLeft, ui.doorRight],
+					alpha: 1,
+					duration: this.animationDuration * 0.125, // Fade takes 12.5% of total time.
+					ease: 'Linear'
+				}
+			},
+			{
+				at: this.animationDuration * 0.15, // Drawer starts extending after a short delay (15% of total time).
+				tween: {
+					targets: ui.drawerSlide,
+					height: (ui.barWidth * 0.55) * (-1),
+					duration: this.animationDuration * 0.5, // Drawer slide takes 50% of total time.
+					ease: 'Cubic.easeOut'
 				}
 			}
-			// --- MODIFICATION END ---
 		]);
 		
 		timeline.play();
 	}
 	
-	/**
-	 * Handles the 'endGoalAnimation' event, playing the "doors close" and "drawer in" tweens.
-	 * @param {{color: string}} data The event data containing the color of the bar to animate.
-	 */
 	handleEndGoalAnimation({ color }) {
 		const ui = this.scoreBarUIs[color];
 		if (!ui) return;
 		
-		// The score has been updated via the 'scorePoint' event, so now we update the visuals.
 		this.updateScoreBar(color);
 		
+		const onDoorUpdate = this._createDoorUpdateHandler();
+		
 		const timeline = this.scene.add.timeline([
-			// --- MODIFICATION START ---
-			// The door tweens now animate the 'angle' property back to 0.
 			{
-				at: 100, // 1. "Barn doors" close, after a 100ms delay.
+				at: this.animationDuration * 0.05, // After a brief pause (5% of total time), drawer retracts.
 				tween: {
-					targets: [ui.doorLeft, ui.doorRight],
-					angle: 0, // Swing back to the closed position.
-					ease: 'Cubic.easeIn',
-					duration: 400
+					targets: ui.drawerSlide,
+					height: 1,
+					duration: this.animationDuration * 0.5, // Drawer slide takes 50% of total time.
+					ease: 'Cubic.easeIn'
 				}
 			},
 			{
-				at: 500, // 2. Drawer retracts upwards, after doors close (100ms delay + 400ms duration).
+				at: this.animationDuration * 0.15, // Doors start closing after drawer is mostly in (at 30% mark).
 				tween: {
-					targets: ui.container,
-					y: ui.originalY,
-					duration: 200,
-					ease: 'Cubic.easeIn'
+					targets: [ui.doorLeft, ui.doorRight],
+					angle: 0,
+					ease: 'Cubic.easeIn',
+					duration: this.animationDuration * 0.6, // Doors take 60% of the total time to swing.
+					onUpdate: onDoorUpdate
+				}
+			},
+			{
+				at: this.animationDuration * 0.8, // Doors start fading out for the last 20% of their close animation.
+				tween: {
+					targets: [ui.doorLeft, ui.doorRight],
+					alpha: 0,
+					duration: this.animationDuration * 0.125, // Fade takes 12.5% of total time.
+					ease: 'Linear'
 				}
 			}
-			// --- MODIFICATION END ---
 		]);
 		
-		// The onComplete logic is handled by listening for the timeline's 'complete' event.
 		timeline.on('complete', () => {
-			// Animation is finished, reset the flag.
-			if (ui) { // Check if ui still exists (e.g. board hasn't changed mid-animation)
+			if (ui) {
 				ui.isAnimating = false;
+				ui.doorLeft.scaleY = 1;
+				ui.doorRight.scaleY = 1;
 			}
 		});
 		
@@ -281,7 +335,6 @@ class BottomScore {
 	}
 	
 	handleResize(gameSize) {
-		// Re-creating the scoreboard is the simplest and most reliable way to handle a resize.
 		this.drawScoreboard();
 	}
 }

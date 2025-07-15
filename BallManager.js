@@ -45,8 +45,6 @@ class BallManager {
 			});
 		});
 		
-		// --- MODIFICATION START ---
-		// The dragend logic is updated to create a "drop and bounce" effect.
 		this.scene.input.on('dragend', (pointer, gameObject) => {
 			this.scene.tweens.killTweensOf(gameObject);
 			
@@ -84,13 +82,12 @@ class BallManager {
 				
 				if (ball && ball.active) {
 					if (ball.color === hitSensor.color) {
-						// --- MODIFICATION START ---
-						// The original logic is replaced with a new animation sequence.
 						this.scene.sound.play('drop_valid', { volume: 0.6 });
 						
 						// Prevent the ball from being dragged or affected by physics during the animation.
 						ball.setStatic(true);
 						ball.setActive(false); // Also set inactive to be safe.
+						ball.setCollisionCategory(0); // Disable collisions temporarily.
 						
 						// Get the target coordinates from the BottomScore manager.
 						const targetInfo = this.scene.bottomScore.getBarAnimationInfo(ball.color);
@@ -104,12 +101,11 @@ class BallManager {
 								targets: ball,
 								x: targetInfo.x,
 								y: targetInfo.y,
-								scale: 0, // Shrink the ball as it enters the "gate".
-								duration: 400,
+								alpha: 0.3,
+								duration: 900,
 								ease: 'Cubic.easeIn',
-								delay: 250, // Wait for the drawer animation to play out a bit.
+								delay: 300,
 								onComplete: () => {
-									// Once the ball arrives at the destination:
 									// 1. Officially score the point.
 									this.scene.game.events.emit('scorePoint', { color: ball.color });
 									
@@ -127,7 +123,6 @@ class BallManager {
 							this.scene.game.events.emit('scorePoint', { color: ball.color });
 							this.fadeAndDestroyBall(ball);
 						}
-						// --- MODIFICATION END ---
 					} else {
 						this.scene.sound.play('drop_invalid', { volume: 0.6 });
 						this.fadeAndDestroyBall(ball);
@@ -169,7 +164,6 @@ class BallManager {
 				}
 			}
 		});
-		// --- MODIFICATION END ---
 	}
 	
 	update(time, delta) {
