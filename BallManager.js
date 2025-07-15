@@ -4,7 +4,14 @@ class BallManager {
 		this.scene = scene; // Store a reference to the main scene.
 		this.boardView = boardView; // Store a reference to the board view manager.
 		
-		this.ballConfig = { ...GAME_CONFIG.BallScene };
+		this.ballConfig = {...GAME_CONFIG.BallScene};
+		// --- MODIFICATION START ---
+		// Adjusted physics parameters for stable dragging
+		this.ballConfig.dragStiffness = 0.01; // How strongly the ball follows the cursor (0-1)
+		this.ballConfig.dragDamping = 0.9; // Velocity damping while dragging (0-1)
+		this.ballConfig.maxDragVelocity = 10; // Maximum velocity while dragging
+		// --- MODIFICATION END ---
+		
 		// These properties are set dynamically when the board configuration changes.
 		this.ballConfig.colors = [];
 		this.ballConfig.maxBalls = this.ballConfig.defaultMaxBalls;
@@ -29,23 +36,101 @@ class BallManager {
 			this.resetBalls();
 		}, this);
 		
-		this.scene.input.on('drag', (pointer, gameObject, dragX, dragY) => { gameObject.setPosition(dragX, dragY); });
-		
+		// --- MODIFICATION START: Improved Physics-based Dragging Logic ---
 		this.scene.input.on('dragstart', (pointer, gameObject) => {
-			this.scene.sound.play('click', { volume: 0.5 });
-			gameObject.setStatic(true);
+			// Ensure we are only dragging balls that have a physics body.
+			if (!gameObject.body || gameObject.body.label !== 'ball') return;
+			
+			this.scene.sound.play('click', {volume: 0.5});
+			
+			// The ball remains a dynamic physics object.
+			gameObject.originalFrictionAir = gameObject.body.frictionAir;
+			gameObject.setFrictionAir(0.1); // Increased air friction for better control
+			gameObject.isDragging = true;
+			
+			// Store the drag offset to maintain relative position
+			gameObject.dragOffsetX = gameObject.x - pointer.x;
+			gameObject.dragOffsetY = gameObject.y - pointer.y;
 			
 			this.scene.children.bringToTop(gameObject);
 			
+			gameObject.setStatic(true);
 			this.scene.tweens.add({
 				targets: gameObject,
 				scale: this.ballConfig.finalSize * 0.75,
 				duration: 150,
-				ease: 'Power2'
+				ease: 'Power2',
+				onComplete: () => {
+					gameObject.setStatic(false);
+				}
 			});
 		});
 		
+		this.scene.input.on('drag', (pointer, gameObject, dragX, dragY) => {
+			// Ensure we are only dragging balls.
+			if (!gameObject.body || gameObject.body.label !== 'ball') return;
+			
+			// Calculate the desired position
+			const targetX = dragX;
+			const targetY = dragY;
+			
+			// Calculate the difference between current and target position
+			const dx = targetX - gameObject.x;
+			const dy = targetY - gameObject.y;
+			
+			// Apply a spring-like force proportional to the distance
+			// This creates a smooth following effect
+			const forceX = dx * this.ballConfig.dragStiffness;
+			const forceY = dy * this.ballConfig.dragStiffness;
+			
+			// Set velocity directly for more control (instead of applying force)
+			gameObject.setVelocity(
+				forceX * 60, // Multiply by 60 to convert to per-second units
+				forceY * 60
+			);
+			
+			// Apply velocity damping to prevent oscillation
+			const currentVelocity = gameObject.body.velocity;
+			const speed = Math.sqrt(currentVelocity.x * currentVelocity.x + currentVelocity.y * currentVelocity.y);
+			
+			// Clamp the velocity to prevent excessive speeds
+			if (speed > this.ballConfig.maxDragVelocity) {
+				const scale = this.ballConfig.maxDragVelocity / speed;
+				gameObject.setVelocity(
+					currentVelocity.x * scale,
+					currentVelocity.y * scale
+				);
+			}
+			
+			// Apply additional damping
+			gameObject.setVelocity(
+				gameObject.body.velocity.x * this.ballConfig.dragDamping,
+				gameObject.body.velocity.y * this.ballConfig.dragDamping
+			);
+			
+			// Prevent rotation while dragging
+			gameObject.setAngularVelocity(0);
+		});
+		
 		this.scene.input.on('dragend', (pointer, gameObject) => {
+			// Ensure we are only ending the drag for a ball.
+			if (!gameObject.body || gameObject.body.label !== 'ball' || !gameObject.active) return;
+			gameObject.isDragging = false;
+			
+			// Clean up drag properties
+			delete gameObject.dragOffsetX;
+			delete gameObject.dragOffsetY;
+			
+			// Restore the ball's original physics properties.
+			if (gameObject.originalFrictionAir !== undefined) {
+				gameObject.setFrictionAir(gameObject.originalFrictionAir);
+				delete gameObject.originalFrictionAir;
+			}
+			
+			// Stop the ball from moving when released
+			gameObject.setVelocity(0, 0);
+			gameObject.setAngularVelocity(0);
+			
 			this.scene.tweens.killTweensOf(gameObject);
 			
 			const playArea = this.boardView.playAreaPolygon;
@@ -59,8 +144,7 @@ class BallManager {
 			let hitSensor = null;
 			
 			if (goalSensors && goalSensors.length > 0) {
-				const point = { x: dropX, y: dropY };
-				console.log('Checking drop point:', point);
+				const point = {x: dropX, y: dropY};
 				const bodiesUnderPoint = this.scene.matter.query.point(goalSensors, point);
 				
 				if (bodiesUnderPoint.length > 0) {
@@ -77,26 +161,22 @@ class BallManager {
 			}
 			
 			if (isGoalDrop) {
-				console.log('Valid drop inside goal sensor:', hitSensor);
 				const ball = gameObject;
 				
 				if (ball && ball.active) {
 					if (ball.color === hitSensor.color) {
-						this.scene.sound.play('drop_valid', { volume: 0.6 });
+						this.scene.sound.play('drop_valid', {volume: 0.6});
 						
-						// Prevent the ball from being dragged or affected by physics during the animation.
+						// For the scoring animation, we DO make it static.
 						ball.setStatic(true);
-						ball.setActive(false); // Also set inactive to be safe.
-						ball.setCollisionCategory(0); // Disable collisions temporarily.
+						ball.setActive(false);
+						ball.setCollisionCategory(0);
 						
-						// Get the target coordinates from the BottomScore manager.
 						const targetInfo = this.scene.bottomScore.getBarAnimationInfo(ball.color);
 						
 						if (targetInfo) {
-							// Tell the BottomScore UI to start its "drawer open" animation.
-							this.scene.game.events.emit('startGoalAnimation', { color: ball.color });
+							this.scene.game.events.emit('startGoalAnimation', {color: ball.color});
 							
-							// Animate the ball flying into the score bar.
 							this.scene.tweens.add({
 								targets: ball,
 								x: targetInfo.x,
@@ -106,69 +186,50 @@ class BallManager {
 								ease: 'Cubic.easeIn',
 								delay: 300,
 								onComplete: () => {
-									// 1. Officially score the point.
-									this.scene.game.events.emit('scorePoint', { color: ball.color });
-									
-									// 2. Tell the BottomScore UI to close the drawer.
-									this.scene.game.events.emit('endGoalAnimation', { color: ball.color });
-									
-									// 3. Clean up the ball object and schedule a new one to spawn.
+									this.scene.game.events.emit('scorePoint', {color: ball.color});
+									this.scene.game.events.emit('endGoalAnimation', {color: ball.color});
 									this.balls.remove(ball, true, true);
 									this.scene.time.delayedCall(this.ballConfig.respawnDelay, this.spawnBall, [], this);
 								}
 							});
 						} else {
-							// Fallback in case the animation target can't be found.
-							// This preserves the original scoring behavior.
-							this.scene.game.events.emit('scorePoint', { color: ball.color });
+							this.scene.game.events.emit('scorePoint', {color: ball.color});
 							this.fadeAndDestroyBall(ball);
 						}
 					} else {
-						this.scene.sound.play('drop_invalid', { volume: 0.6 });
+						this.scene.sound.play('drop_invalid', {volume: 0.6});
 						this.fadeAndDestroyBall(ball);
 					}
 				}
 			} else if (isValidDrop) {
-				this.scene.sound.play('click_drop', { volume: 0.6 });
+				this.scene.sound.play('click_drop', {volume: 0.6});
 				
-				// To create a "fall" effect, we slightly lift the ball before dropping it.
-				const finalDropY = gameObject.y;
-				gameObject.y -= 20; // Lift it up a bit.
-				
-				// Animate the ball dropping down with a bounce.
-				this.scene.tweens.add({
-					targets: gameObject,
-					y: finalDropY, // Animate to the original drop position.
-					duration: 600,
-					ease: 'Bounce.easeOut',
-					onComplete: () => {
-						// Only make the ball dynamic after the drop animation is complete.
-						if (gameObject.active) {
-							gameObject.setStatic(false);
-							gameObject.setVelocity(pointer.velocity.x / 5, pointer.velocity.y / 5);
-						}
-					}
-				});
-				
-				// Concurrently, animate the scale back to its normal size.
+				// Animate the scale back to its normal size.
+				gameObject.setStatic(true);
 				this.scene.tweens.add({
 					targets: gameObject,
 					scale: this.ballConfig.finalSize,
 					duration: 250,
-					ease: 'Sine.easeOut'
+					ease: 'Sine.easeOut',
+					onComplete: () => {
+						// After the animation, we can apply organic movement.
+						gameObject.setStatic(false);
+					}
 				});
 			} else {
-				this.scene.sound.play('drop_invalid', { volume: 0.6 });
+				this.scene.sound.play('drop_invalid', {volume: 0.6});
 				if (gameObject.active) {
 					this.fadeAndDestroyBall(gameObject);
 				}
 			}
 		});
+		// --- MODIFICATION END ---
 	}
 	
 	update(time, delta) {
 		this.balls.getChildren().forEach(ball => {
-			if (!ball.body || ball.isStatic()) return;
+			// Don't apply organic force to a ball being dragged.
+			if (!ball.body || ball.isStatic() || ball.isDragging) return;
 			
 			if (Math.random() > this.ballConfig.organicMoveThreshold) {
 				const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
@@ -197,8 +258,8 @@ class BallManager {
 			const p1_local = localVertices[i];
 			const p2_local = localVertices[(i + 1) % localVertices.length];
 			
-			const p1_world = { x: playArea.center.x + p1_local.x, y: playArea.center.y + p1_local.y };
-			const p2_world = { x: playArea.center.x + p2_local.x, y: playArea.center.y + p2_local.y };
+			const p1_world = {x: playArea.center.x + p1_local.x, y: playArea.center.y + p1_local.y};
+			const p2_world = {x: playArea.center.x + p2_local.x, y: playArea.center.y + p2_local.y};
 			
 			const length = Phaser.Math.Distance.BetweenPoints(p1_world, p2_world);
 			const angle = Phaser.Math.Angle.BetweenPoints(p1_world, p2_world);
@@ -220,7 +281,9 @@ class BallManager {
 	}
 	
 	spawnBall() {
-		if (this.balls.countActive(true) >= this.ballConfig.maxBalls || this.ballConfig.colors.length === 0) { return; }
+		if (this.balls.countActive(true) >= this.ballConfig.maxBalls || this.ballConfig.colors.length === 0) {
+			return;
+		}
 		if (!this.boardView.playAreaPolygon) {
 			this.scene.time.delayedCall(50, this.spawnBall, [], this);
 			return;
@@ -237,13 +300,14 @@ class BallManager {
 		const ballColor = this.ballConfig.colors[colorIndex];
 		
 		const ball = this.scene.matter.add.image(spawnX, spawnY, textureKey, null, {
-			shape: { type: 'circle', radius: this.ballConfig.pixelSize },
+			shape: {type: 'circle', radius: this.ballConfig.pixelSize},
 			restitution: this.ballConfig.restitution,
 			frictionAir: this.ballConfig.frictionAir,
 			label: 'ball'
 		});
 		this.balls.add(ball);
 		ball.color = ballColor;
+		ball.isDragging = false; // Custom property to track dragging state.
 		
 		ball.setScale(this.ballConfig.initialSize);
 		ball.setOrigin(0.5, 0.5);
@@ -257,7 +321,7 @@ class BallManager {
 			duration: this.ballConfig.dropDuration,
 			ease: 'Bounce.easeOut',
 			onStart: () => {
-				this.scene.sound.play('drop', { volume: 0.7 });
+				this.scene.sound.play('drop', {volume: 0.7});
 			},
 			onComplete: () => {
 				if (!ball.active) return;
@@ -353,7 +417,9 @@ class BallManager {
 	}
 	
 	getRandomPointInPolygon(polygon) {
-		if (!polygon || !polygon.points || polygon.points.length < 3) { return null; }
+		if (!polygon || !polygon.points || polygon.points.length < 3) {
+			return null;
+		}
 		const vertices = polygon.points;
 		const centralVertex = vertices[0];
 		const triangles = [];
@@ -363,10 +429,12 @@ class BallManager {
 			const p2 = vertices[i];
 			const p3 = vertices[i + 1];
 			const area = Phaser.Geom.Triangle.Area(new Phaser.Geom.Triangle(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y));
-			triangles.push({ p1, p2, p3, area });
+			triangles.push({p1, p2, p3, area});
 			totalArea += area;
 		}
-		if (totalArea <= 0) { return new Phaser.Geom.Point(centralVertex.x, centralVertex.y); }
+		if (totalArea <= 0) {
+			return new Phaser.Geom.Point(centralVertex.x, centralVertex.y);
+		}
 		let randomArea = Math.random() * totalArea;
 		let chosenTriangle = null;
 		for (const triangle of triangles) {
@@ -376,11 +444,16 @@ class BallManager {
 			}
 			randomArea -= triangle.area;
 		}
-		if (!chosenTriangle) { chosenTriangle = triangles[triangles.length - 1]; }
+		if (!chosenTriangle) {
+			chosenTriangle = triangles[triangles.length - 1];
+		}
 		let r1 = Math.random();
 		let r2 = Math.random();
-		if (r1 + r2 > 1) { r1 = 1.0 - r1; r2 = 1.0 - r2; }
-		const { p1, p2, p3 } = chosenTriangle;
+		if (r1 + r2 > 1) {
+			r1 = 1.0 - r1;
+			r2 = 1.0 - r2;
+		}
+		const {p1, p2, p3} = chosenTriangle;
 		const x = p1.x + r1 * (p2.x - p1.x) + r2 * (p3.x - p1.x);
 		const y = p1.y + r1 * (p2.y - p1.y) + r2 * (p3.y - p1.y);
 		return new Phaser.Geom.Point(x, y);
