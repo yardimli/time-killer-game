@@ -5,12 +5,10 @@ class BallManager {
 		this.boardView = boardView; // Store a reference to the board view manager.
 		
 		this.ballConfig = {...GAME_CONFIG.BallScene};
-		// --- MODIFICATION START ---
 		// Adjusted physics parameters for stable dragging
 		this.ballConfig.dragStiffness = 0.01; // How strongly the ball follows the cursor (0-1)
 		this.ballConfig.dragDamping = 0.9; // Velocity damping while dragging (0-1)
 		this.ballConfig.maxDragVelocity = 10; // Maximum velocity while dragging
-		// --- MODIFICATION END ---
 		
 		// These properties are set dynamically when the board configuration changes.
 		this.ballConfig.colors = [];
@@ -36,7 +34,7 @@ class BallManager {
 			this.resetBalls();
 		}, this);
 		
-		// --- MODIFICATION START: Improved Physics-based Dragging Logic ---
+		// --- Improved Physics-based Dragging Logic ---
 		this.scene.input.on('dragstart', (pointer, gameObject) => {
 			// Ensure we are only dragging balls that have a physics body.
 			if (!gameObject.body || gameObject.body.label !== 'ball') return;
@@ -160,11 +158,14 @@ class BallManager {
 				}
 			}
 			
+			let dropProcessed = false;
+			
 			if (isGoalDrop) {
 				const ball = gameObject;
 				
 				if (ball && ball.active) {
 					if (ball.color === hitSensor.color) {
+						dropProcessed = true;
 						this.scene.sound.play('drop_valid', {volume: 0.6});
 						
 						// For the scoring animation, we DO make it static.
@@ -192,18 +193,12 @@ class BallManager {
 									this.scene.time.delayedCall(this.ballConfig.respawnDelay, this.spawnBall, [], this);
 								}
 							});
-						} else {
-							this.scene.game.events.emit('scorePoint', {color: ball.color});
-							this.fadeAndDestroyBall(ball);
 						}
-					} else {
-						this.scene.sound.play('drop_invalid', {volume: 0.6});
-						this.fadeAndDestroyBall(ball);
 					}
 				}
 			} else if (isValidDrop) {
 				this.scene.sound.play('click_drop', {volume: 0.6});
-				
+				dropProcessed = true;
 				// Animate the scale back to its normal size.
 				gameObject.setStatic(true);
 				this.scene.tweens.add({
@@ -216,8 +211,10 @@ class BallManager {
 						gameObject.setStatic(false);
 					}
 				});
-			} else {
-				// --- MODIFICATION START: Handle invalid drop by returning ball to center ---
+			}
+			
+			if (!dropProcessed) {
+				// --- Handle invalid drop by returning ball to center ---
 				this.scene.sound.play('drop_invalid', {volume: 0.6});
 				if (gameObject.active) {
 					const center = this.boardView.playArea.center;
@@ -239,69 +236,120 @@ class BallManager {
 							}
 						});
 					} else {
+						console.warn('No center point available for returning the ball.');
 						// Fallback to the old behavior if center isn't found
 						this.fadeAndDestroyBall(gameObject);
 					}
 				}
-				// --- MODIFICATION END ---
 			}
 		});
-		// --- MODIFICATION END ---
 	}
 	
 	update(time, delta) {
+		// --- Push balls out of goal areas ---
+		const goalSensors = this.boardView.goalSensors;
+		const playAreaCenter = this.boardView.playArea.center;
+		
 		this.balls.getChildren().forEach(ball => {
-			// Don't apply organic force to a ball being dragged.
-			if (!ball.body || ball.isStatic() || ball.isDragging) return;
+			// Don't apply any forces to a ball being dragged, static, or inactive.
+			if (!ball.body || !ball.active || ball.isStatic() || ball.isDragging) return;
 			
-			if (Math.random() > this.ballConfig.organicMoveThreshold) {
-				const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-				const force = new Phaser.Math.Vector2(
-					Math.cos(angle) * this.ballConfig.organicMoveForce,
-					Math.sin(angle) * this.ballConfig.organicMoveForce
-				);
-				ball.applyForce(force);
+			let isInGoal = false;
+			// Check if the ball has wandered into a goal area.
+			if (goalSensors && goalSensors.length > 0) {
+				const bodiesUnderPoint = this.scene.matter.query.point(goalSensors, { x: ball.x, y: ball.y });
+				if (bodiesUnderPoint.length > 0) {
+					isInGoal = true;
+				}
+			}
+			
+			if (isInGoal && playAreaCenter) {
+				// The ball is inside a goal sensor. Push it back towards the center of the arena.
+				const direction = new Phaser.Math.Vector2(playAreaCenter.x - ball.x, playAreaCenter.y - ball.y);
+				direction.normalize();
+				
+				// A small, constant force to gently nudge the ball.
+				// This value could be added to ballConfig for easier tuning.
+				const repelForce = 0.001;
+				direction.scale(repelForce);
+				
+				ball.applyForce(direction);
+				
+			} else {
+				// If not in a goal, apply the standard organic movement.
+				if (Math.random() > this.ballConfig.organicMoveThreshold) {
+					const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+					const force = new Phaser.Math.Vector2(
+						Math.cos(angle) * this.ballConfig.organicMoveForce,
+						Math.sin(angle) * this.ballConfig.organicMoveForce
+					);
+					ball.applyForce(force);
+				}
 			}
 		});
 	}
 	
+	/**
+	 * Creates the physical walls for the arena based on the detailed border segments
+	 * from the BoardView. This method intelligently skips creating walls for segments
+	 * marked as goals, leaving physical openings that balls can pass through.
+	 */
 	createWallsFromPolygon() {
 		this.walls.clear(true, true);
 		
-		const playArea = this.boardView.playArea;
-		if (!playArea || !playArea.center || !playArea.vertices || playArea.vertices.length < 2) {
-			console.warn('Cannot create walls, playArea data is invalid.');
+		// Get the border segments calculated by BoardView. These define the walls and goal openings.
+		const borderSegments = this.boardView.borderSegments;
+		// Get the BoardView's image object to calculate world coordinates.
+		const boardImage = this.boardView.boardImage;
+		// Get the dimensions and scale for coordinate conversion.
+		const boardPixelDimension = this.boardView.boardPixelDimension;
+		const pixelScale = this.boardView.PIXEL_SCALE;
+		
+		// Check if the necessary data is available.
+		if (!borderSegments || borderSegments.length === 0 || !boardImage) {
+			console.warn('Cannot create walls, border segment data is not ready.');
 			return;
 		}
 		
-		const localVertices = playArea.vertices;
-		const wallThickness = 10;
+		const wallThickness = 10; // Thickness of the physics bodies for the walls.
+		const textureCenter = {x: boardPixelDimension / 2, y: boardPixelDimension / 2};
 		
-		for (let i = 0; i < localVertices.length; i++) {
-			const p1_local = localVertices[i];
-			const p2_local = localVertices[(i + 1) % localVertices.length];
+		// Iterate over each segment defined in BoardView.
+		borderSegments.forEach(segment => {
 			
-			const p1_world = {x: playArea.center.x + p1_local.x, y: playArea.center.y + p1_local.y};
-			const p2_world = {x: playArea.center.x + p2_local.x, y: playArea.center.y + p2_local.y};
+			// Convert the segment's start and end points from texture coordinates to world coordinates.
+			const p1_world = {
+				x: boardImage.x + (segment.p1.x - textureCenter.x) * pixelScale,
+				y: boardImage.y + (segment.p1.y - textureCenter.y) * pixelScale
+			};
+			const p2_world = {
+				x: boardImage.x + (segment.p2.x - textureCenter.x) * pixelScale,
+				y: boardImage.y + (segment.p2.y - textureCenter.y) * pixelScale
+			};
 			
+			// Calculate properties for the Matter.js rectangle (wall segment).
 			const length = Phaser.Math.Distance.BetweenPoints(p1_world, p2_world);
 			const angle = Phaser.Math.Angle.BetweenPoints(p1_world, p2_world);
 			const centerX = (p1_world.x + p2_world.x) / 2;
 			const centerY = (p1_world.y + p2_world.y) / 2;
 			
+			// Create a rectangle to represent the wall segment.
 			const wallSegmentGO = this.scene.add.rectangle(centerX, centerY, length, wallThickness);
 			
+			// Add the rectangle to the Matter.js physics world as a static body.
 			this.scene.matter.add.gameObject(wallSegmentGO, {
 				isStatic: true,
 				restitution: 0.5,
 				friction: 0.1
 			});
 			
+			// Set the rotation and hide the visual representation of the physics body.
 			wallSegmentGO.setRotation(angle);
-			wallSegmentGO.setVisible(false);
+			wallSegmentGO.setVisible(false); // The visual wall is drawn on the boardTexture.
 			this.walls.add(wallSegmentGO);
-		}
+		});
 	}
+	// --- MODIFICATION END ---
 	
 	spawnBall() {
 		if (this.balls.countActive(true) >= this.ballConfig.maxBalls || this.ballConfig.colors.length === 0) {
