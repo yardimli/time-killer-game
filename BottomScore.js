@@ -22,6 +22,12 @@ class BottomScore {
 		// Change this single value to speed up or slow down the entire goal animation.
 		// Original total time was ~2000ms.
 		this.animationDuration = 2400; // Base duration in ms.
+		
+		// Configuration for ball layout
+		this.BALLS_PER_ROW = 5;
+		this.MAX_ROWS = 4; // 20 balls total = 4 rows of 5
+		this.BALL_H_PADDING = 30; // Horizontal padding between balls
+		this.BALL_V_PADDING = 5; // Vertical padding between balls
 	}
 	
 	init() {
@@ -103,32 +109,83 @@ class BottomScore {
 			
 			const container = this.scene.add.container(containerX, containerY);
 			
-			// Modified: The background is now a black box with a white border, representing the drawer.
-			const barBackground = this.scene.add.rectangle(0, 0, barWidth, barHeight, 0x000000).setStrokeStyle(2, 0xFFFFFF);
+			// The main bar background - this is now the visible progress bar
+			const barBackground = this.scene.add.rectangle(0, 0, barWidth, barHeight, 0x222222)
+				.setStrokeStyle(2, 0xFFFFFF);
 			
-			// New: This container will hold the graphics for the collected balls.
-			// It's positioned at the left edge of the bar background.
-			const ballHolder = this.scene.add.container(-(barWidth / 2), 0);
+			// Progress fill - initially empty
+			const progressFill = this.scene.add.rectangle(
+				-barWidth/2,
+				0,
+				0,
+				barHeight,
+				Phaser.Display.Color.HexStringToColor(color).color
+			).setOrigin(0, 0.5);
 			
-			// This part is for the "drawer opening" animation effect.
-			const drawerSlide = this.scene.add.rectangle(0, 0, barWidth * 0.95, 1, 0x222222).setOrigin(0.5, 1).setStrokeStyle(1, Phaser.Display.Color.HexStringToColor(color).color, 0.8);
+			// Calculate drawer dimensions to fit 4 rows of 5 balls with padding
+			const totalBallHSpace = (barWidth - this.BALL_H_PADDING) / this.BALLS_PER_ROW;
+			const ballDiameter = totalBallHSpace - this.BALL_H_PADDING;
+			const totalBallVSpace = ballDiameter + this.BALL_V_PADDING;
+			const drawerHeight = totalBallVSpace * this.MAX_ROWS + this.BALL_V_PADDING; // Extra padding at bottom
+			
+			// This creates the illusion of a "slot" from which the drawer emerges.
+			const drawerBackdrop = this.scene.add.rectangle(
+				0,
+				barHeight / 2,
+				barWidth,
+				drawerHeight,
+				Phaser.Display.Color.HexStringToColor(GAME_CONFIG.BoardViewScene.backgroundColor).color
+			).setOrigin(0.5, 0);
+			
+			// The drawer container that will hold both the drawer background and balls
+			const drawerContainer = this.scene.add.container(0, barHeight / 2);
+			
+			// The drawer background
+			const drawerSlide = this.scene.add.rectangle(
+				0,
+				0,
+				barWidth * 0.95,
+				drawerHeight,
+				0x222222
+			).setOrigin(0.5, 0).setStrokeStyle(1, 0x000000);
+			
+			// This container will hold the graphics for the collected balls.
+			const ballHolder = this.scene.add.container(0, 0);
+			
+			// Add drawer background and ball holder to the drawer container
+			drawerContainer.add([drawerSlide, ballHolder]);
 			
 			const doorWidth = barWidth / 2;
 			const doorHeight = barHeight;
 			const doorColor = Phaser.Display.Color.HexStringToColor(color).color;
 			
-			const doorLeft = this.scene.add.rectangle(-barWidth / 2, -15, doorWidth, doorHeight, doorColor).setOrigin(0, 0.5).setStrokeStyle(1, doorColor).setAlpha(0);
-			const doorRight = this.scene.add.rectangle(barWidth / 2, -15, doorWidth, doorHeight, doorColor).setOrigin(1, 0.5).setStrokeStyle(1, doorColor).setAlpha(0);
+			// --- MODIFIED LINES START ---
+			const doorLeft = this.scene.add.rectangle(-barWidth / 2, 0, doorWidth, doorHeight, doorColor, 0.1)
+				.setOrigin(0, 0.5).setStrokeStyle(1, 0xffffff).setAlpha(0);
+			const doorRight = this.scene.add.rectangle(barWidth / 2, 0, doorWidth, doorHeight, doorColor, 0.1)
+				.setOrigin(1, 0.5).setStrokeStyle(1, 0xffffff).setAlpha(0);
+			// --- MODIFIED LINES END ---
 			
-			const scoreText = this.scene.add.text(0, 0, '', textStyle).setOrigin(0.5).setStroke('#FFFFFF', 2);
+			const scoreText = this.scene.add.text(0, -barHeight/2 - 10, '', textStyle)
+				.setOrigin(0.5).setStroke('#FFFFFF', 2);
 			
-			// Modified: The 'fill' rectangle is removed and 'ballHolder' is added.
-			container.add([drawerSlide, barBackground, ballHolder, scoreText, doorLeft, doorRight]);
+			// The container's add order is important for layering.
+			container.add([
+				drawerContainer,
+				drawerBackdrop,
+				barBackground,
+				progressFill,
+				scoreText,
+				doorLeft,
+				doorRight
+			]);
 			
-			// Modified: Storing a reference to ballHolder instead of the old fill bar.
+			// Storing properties for the position-based animation.
 			this.scoreBarUIs[color] = {
 				container: container,
 				barBackground: barBackground,
+				progressFill: progressFill,
+				drawerContainer: drawerContainer,
 				drawerSlide: drawerSlide,
 				ballHolder: ballHolder,
 				doorLeft: doorLeft,
@@ -138,59 +195,68 @@ class BottomScore {
 				originalX: containerX,
 				barWidth: barWidth,
 				barHeight: barHeight,
-				isAnimating: false
+				isAnimating: false,
+				closedDrawerY: 0,
+				openDrawerY: drawerHeight * (-1), // Negative to slide up
+				drawerHeight: drawerHeight,
+				ballDiameter: ballDiameter,
+				ballHPadding: this.BALL_H_PADDING,
+				ballVPadding: this.BALL_V_PADDING,
+				totalBallHSpace: totalBallHSpace,
+				totalBallVSpace: totalBallVSpace
 			};
 			
 			this.updateScoreBar(color);
 		});
 	}
 	
-	// Modified: This function now draws collected balls instead of a progress bar.
 	updateScoreBar(color) {
 		const ui = this.scoreBarUIs[color];
 		if (!ui) return;
 		
-		// Clear any previously drawn balls to prevent duplicates.
+		const score = this.scores[color] || 0;
+		
+		// Update progress bar
+		const progressWidth = (score / this.INDIVIDUAL_MAX_SCORE) * ui.barWidth;
+		ui.progressFill.width = progressWidth;
+		
+		// Update balls in drawer
 		ui.ballHolder.removeAll(true);
 		
-		const score = this.scores[color] || 0;
-		// We only display up to the maximum, even if the score is higher.
 		const ballsToShow = Math.min(score, this.INDIVIDUAL_MAX_SCORE);
-		
-		// --- Calculate dimensions for the collected balls ---
-		const totalWidth = ui.barWidth;
-		const maxBalls = this.INDIVIDUAL_MAX_SCORE;
-		// The space allocated for each ball, including its margin.
-		const slotWidth = totalWidth / maxBalls;
-		// The ball's diameter is a percentage of the slot, leaving space for margins.
-		const ballDiameter = slotWidth * 0.8;
-		const ballRadius = ballDiameter / 2;
-		
+		const ballRadius = ui.ballDiameter / 2;
 		const ballFillColor = Phaser.Display.Color.HexStringToColor(color).color;
 		const highlightColor = Phaser.Display.Color.ValueToColor(color).lighten(50);
 		
-		// --- Draw the collected balls ---
+		// Calculate starting position for centering balls
+		const totalWidth = this.BALLS_PER_ROW * ui.totalBallHSpace - ui.ballHPadding;
+		const startX = -totalWidth / 2 + ballRadius;
+		const startY = ballRadius + ui.ballVPadding / 2;
+		
 		for (let i = 0; i < ballsToShow; i++) {
-			// Calculate the center X position for the current ball within its slot.
-			const ballX = (i * slotWidth) + (slotWidth / 2);
-			const ballY = 0; // Y is 0 because it's relative to the vertically centered ballHolder.
+			const row = Math.floor(i / this.BALLS_PER_ROW);
+			const col = i % this.BALLS_PER_ROW;
 			
-			// Create a graphics object for each ball.
+			const ballX = startX + (col * ui.totalBallHSpace);
+			const ballY = startY + (row * ui.totalBallVSpace);
+			
 			const ballGraphic = this.scene.add.graphics({ x: ballX, y: ballY });
 			
-			// Draw the main ball color.
+			// Main ball
 			ballGraphic.fillStyle(ballFillColor);
 			ballGraphic.fillCircle(0, 0, ballRadius);
 			
-			// Add a simple highlight to give a 3D effect.
+			// Highlight
 			ballGraphic.fillStyle(highlightColor.color, 0.6);
 			ballGraphic.fillCircle(-ballRadius * 0.3, -ballRadius * 0.3, ballRadius * 0.4);
 			
-			// Add the new ball graphic to its container.
+			// Outline
+			ballGraphic.lineStyle(1, 0x000000, 0.3);
+			ballGraphic.strokeCircle(0, 0, ballRadius);
+			
 			ui.ballHolder.add(ballGraphic);
 		}
 		
-		// Update the score text as before.
 		ui.text.setText(`${score}/${this.INDIVIDUAL_MAX_SCORE}`);
 	}
 	
@@ -198,19 +264,30 @@ class BottomScore {
 		const ui = this.scoreBarUIs[color];
 		if (!ui) return null;
 		
-		// The height of the drawer when it's fully extended.
-		const openDrawerHeight = ui.barWidth * 0.55;
+		const score = this.scores[color] || 0;
+		const nextBallIndex = Math.min(score, this.INDIVIDUAL_MAX_SCORE - 1); // The index of the next ball to be placed
 		
-		// The Y coordinate of the bottom of the main score bar, which is where the drawer starts.
-		const barBottomY = ui.originalY + (ui.barHeight / 2) - 100;
+		// Calculate the position of the next ball
+		const row = Math.floor(nextBallIndex / this.BALLS_PER_ROW);
+		const col = nextBallIndex % this.BALLS_PER_ROW;
 		
-		// The center of the open drawer.
-		const drawerCenterX = ui.originalX; // The drawer is horizontally aligned with the bar.
-		const drawerCenterY = barBottomY; // Halfway down the extended drawer.
+		const ballRadius = ui.ballDiameter / 2;
+		const totalWidth = this.BALLS_PER_ROW * ui.totalBallHSpace - ui.ballHPadding;
+		const startX = -totalWidth / 2 + ballRadius + ui.ballHPadding / 2;
+		const startY = ballRadius + ui.ballVPadding / 2;
+		
+		const ballX = startX + (col * ui.totalBallHSpace);
+		const ballY = startY + (row * ui.totalBallVSpace);
+		
+		// Convert drawer-relative position to world position
+		// When drawer is open, its Y position is ui.openDrawerY
+		const drawerWorldY = ui.originalY + (ui.barHeight / 2) + ui.openDrawerY;
+		const ballWorldX = ui.originalX + ballX;
+		const ballWorldY = drawerWorldY + ballY;
 		
 		return {
-			x: drawerCenterX,
-			y: drawerCenterY
+			x: ballWorldX,
+			y: ballWorldY
 		};
 	}
 	
@@ -242,17 +319,17 @@ class BottomScore {
 		
 		const timeline = this.scene.add.timeline([
 			{
-				at: 0, // Doors start opening immediately.
+				at: 0,
 				tween: {
 					targets: ui.doorLeft,
 					angle: -110,
 					ease: 'Cubic.easeOut',
-					duration: this.animationDuration * 0.6, // Doors take 60% of the total time to swing.
+					duration: this.animationDuration * 0.6,
 					onUpdate: onDoorUpdate
 				}
 			},
 			{
-				at: 0, // Right door opens simultaneously.
+				at: 0,
 				tween: {
 					targets: ui.doorRight,
 					angle: 110,
@@ -262,20 +339,20 @@ class BottomScore {
 				}
 			},
 			{
-				at: 0, // Doors fade in quickly at the start.
+				at: 0,
 				tween: {
 					targets: [ui.doorLeft, ui.doorRight],
 					alpha: 1,
-					duration: this.animationDuration * 0.125, // Fade takes 12.5% of total time.
+					duration: this.animationDuration * 0.125,
 					ease: 'Linear'
 				}
 			},
 			{
-				at: this.animationDuration * 0.15, // Drawer starts extending after a short delay (15% of total time).
+				at: this.animationDuration * 0.15,
 				tween: {
-					targets: ui.drawerSlide,
-					height: (ui.barWidth * 0.55) * (-1),
-					duration: this.animationDuration * 0.5, // Drawer slide takes 50% of total time.
+					targets: ui.drawerContainer,
+					y: ui.openDrawerY,
+					duration: this.animationDuration * 0.5,
 					ease: 'Cubic.easeOut'
 				}
 			}
@@ -294,30 +371,30 @@ class BottomScore {
 		
 		const timeline = this.scene.add.timeline([
 			{
-				at: this.animationDuration * 0.05, // After a brief pause (5% of total time), drawer retracts.
+				at: this.animationDuration * 0.05,
 				tween: {
-					targets: ui.drawerSlide,
-					height: 1,
-					duration: this.animationDuration * 0.5, // Drawer slide takes 50% of total time.
+					targets: ui.drawerContainer,
+					y: ui.closedDrawerY,
+					duration: this.animationDuration * 0.5,
 					ease: 'Cubic.easeIn'
 				}
 			},
 			{
-				at: this.animationDuration * 0.15, // Doors start closing after drawer is mostly in (at 30% mark).
+				at: this.animationDuration * 0.15,
 				tween: {
 					targets: [ui.doorLeft, ui.doorRight],
 					angle: 0,
 					ease: 'Cubic.easeIn',
-					duration: this.animationDuration * 0.6, // Doors take 60% of the total time to swing.
+					duration: this.animationDuration * 0.6,
 					onUpdate: onDoorUpdate
 				}
 			},
 			{
-				at: this.animationDuration * 0.8, // Doors start fading out for the last 20% of their close animation.
+				at: this.animationDuration * 0.8,
 				tween: {
 					targets: [ui.doorLeft, ui.doorRight],
 					alpha: 0,
-					duration: this.animationDuration * 0.125, // Fade takes 12.5% of total time.
+					duration: this.animationDuration * 0.125,
 					ease: 'Linear'
 				}
 			}
