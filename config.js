@@ -9,6 +9,7 @@ const GAME_CONFIG = {
 	Shared: {
 		PIXEL_SCALE: 2,
 		SELECTOR_SCREEN_WIDTH: 100,
+		NUMBER_OF_SIDES: 3,
 		
 		// Master list of all possible ball colors
 		BALL_COLORS: [

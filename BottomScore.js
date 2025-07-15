@@ -26,7 +26,7 @@ class BottomScore {
 		// Configuration for ball layout
 		this.BALLS_PER_ROW = 5;
 		this.MAX_ROWS = 4; // 20 balls total = 4 rows of 5
-		this.BALL_H_PADDING = 30; // Horizontal padding between balls
+		this.BALL_H_PADDING = 39 - (GAME_CONFIG.Shared.NUMBER_OF_SIDES * 3) ; // Horizontal padding between balls
 		this.BALL_V_PADDING = 5; // Vertical padding between balls
 		
 		// Progress bar rectangle configuration
@@ -53,6 +53,9 @@ class BottomScore {
 			}
 		}
 		this.scoreBarUIs = {};
+		
+		this.BALL_H_PADDING = 39 - (GAME_CONFIG.Shared.NUMBER_OF_SIDES * 3) ; // Horizontal padding between balls
+		
 		
 		// Reset internal score tracking.
 		this.scoreConfig.colors = config.colors;

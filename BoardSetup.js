@@ -88,6 +88,14 @@ class BoardSetup {
 	}
 	
 	emitBoardConfiguration() {
+		// --- MODIFICATION START ---
+		// Dynamically calculate the total max score based on the number of sides.
+		// Each side/goal contributes to the total possible score.
+		const newTotalMaxScore = this.currentSides * GAME_CONFIG.ScoreScenes.INDIVIDUAL_MAX_SCORE;
+		GAME_CONFIG.ScoreScenes.TOTAL_MAX_SCORE = newTotalMaxScore;
+		GAME_CONFIG.Shared.NUMBER_OF_SIDES = this.currentSides;
+		// --- MODIFICATION END ---
+		
 		const shuffledColors = Phaser.Utils.Array.Shuffle([...this.BALL_COLORS]);
 		const selectedColors = shuffledColors.slice(0, this.currentSides);
 		
