@@ -260,7 +260,7 @@ class BottomScore {
 		ui.percentageTween = this.scene.tweens.addCounter({
 			from: ui.currentPercentage,
 			to: targetPercentage,
-			duration: Math.abs(targetPercentage - ui.currentPercentage) * 20, // 20ms per percentage point
+			duration: Math.abs(targetPercentage - ui.currentPercentage) * 50, // 50ms per percentage point
 			ease: 'Linear',
 			onUpdate: (tween) => {
 				const value = Math.floor(tween.getValue());

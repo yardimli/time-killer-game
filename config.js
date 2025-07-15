@@ -43,7 +43,11 @@ const GAME_CONFIG = {
 	BoardSetupScene: {
 		SELECTOR_PIXEL_WIDTH: 40,
 		SLOT_PIXEL_HEIGHT: 30,
-		NUM_ICONS: 4
+		NUM_ICONS: 4, // For polygons (3, 4, 5, 6 sides)
+		// --- MODIFICATION START ---
+		// Added configuration for the number of rectangular board options.
+		NUM_RECT_ICONS: 5 // For rectangles (2, 3, 4, 5, 6 goals)
+		// --- MODIFICATION END ---
 	},
 	
 	// Configuration for BoardViewScene
@@ -68,7 +72,8 @@ const GAME_CONFIG = {
 			depth: 40,
 			chamfer: 18,
 			dashLength: 2,
-			gapLength: 6
+			gapLength: 6,
+			goalGap: 40
 		}
 	},
 	

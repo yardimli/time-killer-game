@@ -20,6 +20,7 @@ class BoardView {
 		
 		this.borderSegments = [];
 		this.currentSides = 3;
+		this.currentBoardType = 'polygon'; // Add board type property
 		this.goals = [];
 		this.goalSensors = [];
 		this.playArea = null;
@@ -72,6 +73,8 @@ class BoardView {
 		
 		this.currentSides = config.sides;
 		this.goals = config.goals;
+		// Store the board type from the configuration.
+		this.currentBoardType = config.boardType;
 		
 		this.drawBoardShape();
 		
@@ -103,21 +106,31 @@ class BoardView {
 	}
 	
 	drawBoardShape() {
+		// Clear previous physics objects and data stores.
 		this.goalSensors.forEach(sensor => this.scene.matter.world.remove(sensor));
 		this.goalSensors = [];
-		
 		this.borderSegments = [];
+		
 		const ctx = this.boardTexture.getContext();
 		ctx.clearRect(0, 0, this.boardPixelDimension, this.boardPixelDimension);
+		
+		// Branch based on the selected board type.
+		if (this.currentBoardType === 'polygon') {
+			this.drawPolygonShape();
+		} else {
+			this.drawRectangleShape();
+		}
+	}
+	
+	// The original drawing logic is moved into its own function.
+	drawPolygonShape() {
 		const centerX = this.boardPixelDimension / 2;
 		const centerY = this.boardPixelDimension / 2;
 		const padding = 10;
 		
 		const apothem = (this.boardPixelDimension / 2) - this.goalConfig.depth - padding;
 		const calculatedRadius = apothem / Math.cos(Math.PI / this.currentSides);
-		
 		const maxFitRadius = (this.boardPixelDimension / 2) - padding;
-		
 		const radius = Math.min(calculatedRadius, maxFitRadius);
 		
 		const worldVertices = [];
@@ -139,9 +152,83 @@ class BoardView {
 		}
 		this.playArea = { center: worldCenter, vertices: localVertices };
 		this.playAreaPolygon = new Phaser.Geom.Polygon(worldVertices);
-		this.createGoalSensors(centerX, centerY, radius, worldCenter);
 		
-		this.drawArena(ctx, centerX, centerY, radius, this.currentSides, '#FFFFFF', this.borderSegments);
+		this.createPolygonGoalSensors(centerX, centerY, radius, worldCenter);
+		
+		const cameraCenterX = this.scene.cameras.main.width / 2;
+		const cameraCenterY = this.scene.cameras.main.height / 2;
+		this.boardImage.setPosition(cameraCenterX, cameraCenterY);
+		
+		// The drawArena function now populates borderSegments directly.
+		this.drawArena(this.boardTexture.getContext(), centerX, centerY, radius, this.currentSides, '#FFFFFF', this.borderSegments);
+		this.boardTexture.update();
+	}
+	
+	// New function to draw the rectangular board.
+	drawRectangleShape() {
+		const padding = 10;
+		const { width: goalWidth } = this.goalConfig;
+		
+		// Calculate minimum width needed for all goals with proper spacing
+		const totalGoalWidth = this.currentSides * goalWidth;
+		const minGapSize = 20; // Minimum gap between goals and at edges
+		const minRequiredWidth = totalGoalWidth + (minGapSize * (this.currentSides + 1));
+		
+		// Use the larger of minimum required width or a base width
+		const baseWidth = Math.floor(this.boardPixelDimension * 0.8); // 80% of board dimension as base
+		const rectWidth = Math.max(minRequiredWidth, baseWidth);
+		
+		// Height remains constant
+		const rectHeight = Math.floor(this.boardPixelDimension * 0.7) - (padding * 2);
+		
+		// Calculate required canvas dimensions
+		const canvasWidth = Math.max(this.boardPixelDimension, rectWidth + (padding * 2));
+		const canvasHeight = this.boardPixelDimension;
+		
+		// Resize the canvas texture if needed
+		if (this.boardTexture.width !== canvasWidth || this.boardTexture.height !== canvasHeight) {
+			this.boardTexture.setSize(canvasWidth, canvasHeight);
+			this.boardImage.setDisplaySize(canvasWidth * this.PIXEL_SCALE, canvasHeight * this.PIXEL_SCALE);
+			
+			// Get the center of the screen/camera
+			const centerX = this.scene.cameras.main.width / 2;
+			const centerY = this.scene.cameras.main.height / 2;
+			
+			console.log(centerX, centerY, canvasWidth, canvasHeight);
+
+			// Set the image's position to the center
+			if (canvasWidth > canvasHeight) {
+				this.boardImage.setPosition(centerX - (canvasWidth - canvasHeight - 40), centerY);
+			} else
+			{
+				this.boardImage.setPosition(centerX, centerY - ((canvasHeight - canvasWidth) / 2));
+			}
+		}
+		
+		// Center the rectangle horizontally in the canvas
+		const rectX = (canvasWidth - rectWidth) / 2;
+		const rectY = (canvasHeight - rectHeight) / 2;
+		
+		const worldCenter = { x: this.boardImage.x, y: this.boardImage.y };
+		
+		// Define rectangle corners in canvas coordinates
+		const topLeft = { x: rectX, y: rectY };
+		const topRight = { x: rectX + rectWidth, y: rectY };
+		const bottomRight = { x: rectX + rectWidth, y: rectY + rectHeight };
+		const bottomLeft = { x: rectX, y: rectY + rectHeight };
+		
+		// --- FIX: Update world vertices calculation to account for dynamic canvas size ---
+		const worldVertices = [
+			{ x: worldCenter.x + (topLeft.x - canvasWidth / 2) * this.PIXEL_SCALE, y: worldCenter.y + (topLeft.y - canvasHeight / 2) * this.PIXEL_SCALE },
+			{ x: worldCenter.x + (topRight.x - canvasWidth / 2) * this.PIXEL_SCALE, y: worldCenter.y + (topRight.y - canvasHeight / 2) * this.PIXEL_SCALE },
+			{ x: worldCenter.x + (bottomRight.x - canvasWidth / 2) * this.PIXEL_SCALE, y: worldCenter.y + (bottomRight.y - canvasHeight / 2) * this.PIXEL_SCALE },
+			{ x: worldCenter.x + (bottomLeft.x - canvasWidth / 2) * this.PIXEL_SCALE, y: worldCenter.y + (bottomLeft.y - canvasHeight / 2) * this.PIXEL_SCALE }
+		];
+		this.playAreaPolygon = new Phaser.Geom.Polygon(worldVertices);
+		this.playArea = { center: worldCenter, vertices: [] }; // Center is sufficient for spawning
+		
+		this.drawRectangleArena(this.boardTexture.getContext(), topLeft, rectWidth, rectHeight, '#FFFFFF', this.borderSegments);
+		this.createRectangleGoalSensors(topLeft, rectWidth, worldCenter, canvasWidth); // Pass canvasWidth
 		this.boardTexture.update();
 	}
 	
@@ -196,7 +283,7 @@ class BoardView {
 		this.activeBorderGlitches = this.activeBorderGlitches.filter(g => time < g.startTime + g.duration);
 		
 		const ctx = this.boardTexture.getContext();
-		ctx.clearRect(0, 0, this.boardPixelDimension, this.boardPixelDimension);
+		ctx.clearRect(0, 0, this.boardTexture.width, this.boardTexture.height);
 		
 		// Create a set of all segments that are currently part of an active glitch.
 		// A Set provides fast O(1) average time complexity for lookups.
@@ -292,9 +379,8 @@ class BoardView {
 		const viewHeight = gameSize.height - this.TOP_SCORE_SCREEN_HEIGHT - this.BOTTOM_SCORE_SCREEN_HEIGHT;
 		this.boardImage.setPosition(viewX + viewWidth / 2, viewY + viewHeight / 2);
 		
-		if (this.boardTexture) {
-			this.boardTexture.setSize(this.boardPixelDimension, this.boardPixelDimension);
-		}
+		// Note: Canvas resizing is now handled in drawBoardShape() based on board type
+		// Remove the fixed setSize call here since canvas dimensions are now dynamic
 		
 		this.drawBoardShape();
 	}
@@ -401,7 +487,103 @@ class BoardView {
 		ctx.setLineDash([]);
 	}
 	
-	createGoalSensors(cx, cy, radius, worldCenter) {
+	// --- MODIFICATION START ---
+	// New function to draw the rectangular arena and populate its border segments.
+	drawRectangleArena(ctx, topLeft, width, height, color, segmentStore) {
+		const { width: goalWidth, depth: goalDepth, chamfer, dashLength, gapLength } = this.goalConfig;
+		
+		ctx.lineWidth = 1;
+		ctx.lineCap = 'round';
+		ctx.strokeStyle = color;
+		
+		// --- Draw solid walls (bottom, left, right) ---
+		const topRight = { x: topLeft.x + width, y: topLeft.y };
+		const bottomRight = { x: topLeft.x + width, y: topLeft.y + height };
+		const bottomLeft = { x: topLeft.x, y: topLeft.y + height };
+		
+		ctx.setLineDash([]);
+		ctx.beginPath();
+		ctx.moveTo(bottomLeft.x, bottomLeft.y);
+		ctx.lineTo(topLeft.x, topLeft.y); // Left wall
+		ctx.stroke();
+		ctx.beginPath();
+		ctx.moveTo(bottomLeft.x, bottomLeft.y);
+		ctx.lineTo(bottomRight.x, bottomRight.y); // Bottom wall
+		ctx.stroke();
+		ctx.beginPath();
+		ctx.moveTo(bottomRight.x, bottomRight.y);
+		ctx.lineTo(topRight.x, topRight.y); // Right wall
+		ctx.stroke();
+		
+		if (segmentStore) {
+			segmentStore.push({ p1: bottomLeft, p2: topLeft, isGoal: false });
+			segmentStore.push({ p1: bottomLeft, p2: bottomRight, isGoal: false });
+			segmentStore.push({ p1: bottomRight, p2: topRight, isGoal: false });
+		}
+		
+		// --- Draw top edge with goals ---
+		const totalGoalWidth = this.currentSides * goalWidth;
+		const gapSize = (width - totalGoalWidth) / (this.currentSides + 1);
+		let currentX = topLeft.x;
+		let lastPost = { x: topLeft.x, y: topLeft.y };
+		
+		for (let i = 0; i < this.currentSides; i++) {
+			// Wall segment before the goal
+			const wallStart = lastPost;
+			const wallEnd = { x: currentX + gapSize, y: topLeft.y };
+			ctx.setLineDash([]);
+			ctx.beginPath();
+			ctx.moveTo(wallStart.x, wallStart.y);
+			ctx.lineTo(wallEnd.x, wallEnd.y);
+			ctx.stroke();
+			if (segmentStore) {
+				segmentStore.push({ p1: wallStart, p2: wallEnd, isGoal: false });
+			}
+			
+			currentX += gapSize;
+			
+			// Goal posts
+			const post1 = { x: currentX, y: topLeft.y };
+			const post2 = { x: currentX + goalWidth, y: topLeft.y };
+			
+			// Goal back wall (note: y decreases to go "up" into the goal)
+			const back1 = { x: post1.x + chamfer, y: post1.y - goalDepth };
+			const back2 = { x: post2.x - chamfer, y: post2.y - goalDepth };
+			
+			// Draw dashed goal shape
+			ctx.setLineDash([dashLength, gapLength]);
+			ctx.beginPath();
+			ctx.moveTo(post1.x, post1.y);
+			ctx.lineTo(back1.x, back1.y);
+			ctx.lineTo(back2.x, back2.y);
+			ctx.lineTo(post2.x, post2.y);
+			ctx.stroke();
+			
+			if (segmentStore) {
+				segmentStore.push({ p1: post1, p2: back1, isGoal: true });
+				segmentStore.push({ p1: back1, p2: back2, isGoal: true });
+				segmentStore.push({ p1: back2, p2: post2, isGoal: true });
+			}
+			
+			currentX += goalWidth;
+			lastPost = post2;
+		}
+		
+		// Final wall segment after the last goal
+		ctx.setLineDash([]);
+		ctx.beginPath();
+		ctx.moveTo(lastPost.x, lastPost.y);
+		ctx.lineTo(topRight.x, topRight.y);
+		ctx.stroke();
+		if (segmentStore) {
+			segmentStore.push({ p1: lastPost, p2: topRight, isGoal: false });
+		}
+		
+		ctx.setLineDash([]);
+	}
+	
+	// Renamed from createGoalSensors to be specific.
+	createPolygonGoalSensors(cx, cy, radius, worldCenter) {
 		const {width: goalWidth, depth: goalDepth} = this.goalConfig;
 		
 		const points = [];
@@ -434,8 +616,8 @@ class BoardView {
 			const goalCenterX_canvas = midX + normalX * (goalDepth / 2);
 			const goalCenterY_canvas = midY + normalY * (goalDepth / 2);
 			
-			const goalCenterX_world = worldCenter.x + (goalCenterX_canvas - cx) * this.PIXEL_SCALE;
-			const goalCenterY_world = worldCenter.y + (goalCenterY_canvas - cy) * this.PIXEL_SCALE;
+			const goalCenterX_world = worldCenter.x + (goalCenterX_canvas - this.boardPixelDimension / 2) * this.PIXEL_SCALE;
+			const goalCenterY_world = worldCenter.y + (goalCenterY_canvas - this.boardPixelDimension / 2) * this.PIXEL_SCALE;
 			
 			const sideAngle = Phaser.Math.Angle.Between(p1.x, p1.y, p2.x, p2.y);
 			
@@ -457,4 +639,40 @@ class BoardView {
 			this.goalSensors.push(sensor);
 		}
 	}
+	
+	// New function to create sensors for the rectangular layout.
+	createRectangleGoalSensors(topLeft, width, worldCenter) {
+		const { width: goalWidth, depth: goalDepth } = this.goalConfig;
+		
+		const totalGoalWidth = this.currentSides * goalWidth;
+		const gapSize = (width - totalGoalWidth) / (this.currentSides + 1);
+		let currentX = topLeft.x + gapSize;
+		
+		for (let i = 0; i < this.currentSides; i++) {
+			const goalInfo = this.goals.find(g => g.side === i);
+			if (!goalInfo) continue;
+			
+			// Calculate center of the goal in canvas coordinates
+			const goalCenterX_canvas = currentX + (goalWidth / 2);
+			const goalCenterY_canvas = topLeft.y - (goalDepth / 2);
+			
+			// Convert to world coordinates
+			const goalCenterX_world = worldCenter.x + (goalCenterX_canvas - this.boardPixelDimension / 2) * this.PIXEL_SCALE;
+			const goalCenterY_world = worldCenter.y + (goalCenterY_canvas - this.boardPixelDimension / 2) * this.PIXEL_SCALE;
+			
+			const sensor = this.scene.matter.add.rectangle(
+				goalCenterX_world,
+				goalCenterY_world,
+				goalWidth * this.PIXEL_SCALE,
+				goalDepth * this.PIXEL_SCALE,
+				{ isSensor: true, isStatic: true, label: 'goal' } // Angle is 0 by default
+			);
+			
+			sensor.color = goalInfo.color;
+			this.goalSensors.push(sensor);
+			
+			currentX += goalWidth + gapSize;
+		}
+	}
+	// --- MODIFICATION END ---
 }

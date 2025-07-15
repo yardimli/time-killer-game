@@ -27,7 +27,7 @@ class TopScore {
 		// --- NEW: Configuration for progress bar rectangles, similar to BottomScore ---
 		this.PROGRESS_RECT_WIDTH = 3; // Width of each progress rectangle.
 		this.PROGRESS_RECT_PADDING = 2; // Padding between rectangles.
-		this.PROGRESS_ANIMATION_DELAY = 250; // Delay between each rectangle animation in ms (faster for total).
+		this.PROGRESS_ANIMATION_DELAY = 50; // Delay between each rectangle animation in ms (faster for total).
 	}
 	
 	init() {
@@ -45,6 +45,9 @@ class TopScore {
 		this.scoreConfig.colors.forEach(color => {
 			this.scores[color] = 0;
 		});
+		
+		this.TOTAL_MAX_SCORE = GAME_CONFIG.ScoreScenes.TOTAL_MAX_SCORE;
+		
 		
 		// Re-create the UI for the new configuration or on initial load.
 		this.drawScoreboard();
@@ -165,7 +168,7 @@ class TopScore {
 		this.percentageTween = this.scene.tweens.addCounter({
 			from: this.currentPercentage,
 			to: targetPercentage,
-			duration: Math.abs(targetPercentage - this.currentPercentage) * 20, // 20ms per percentage point.
+			duration: Math.abs(targetPercentage - this.currentPercentage) * 50, // 50ms per percentage point.
 			ease: 'Linear',
 			onUpdate: (tween) => {
 				const value = Math.floor(tween.getValue());
