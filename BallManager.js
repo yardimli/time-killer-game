@@ -334,7 +334,6 @@ class BallManager {
 		});
 	}
 	
-	// --- MODIFICATION START ---
 	spawnBall() {
 		if (this.balls.countActive(true) >= this.ballConfig.maxBalls || this.ballConfig.colors.length === 0) {
 			return;
@@ -399,7 +398,6 @@ class BallManager {
 			}
 		});
 	}
-	// --- MODIFICATION END ---
 	
 	createBallTextures() {
 		this.ballConfig.colors.forEach((color, index) => {

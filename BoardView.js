@@ -487,7 +487,6 @@ class BoardView {
 		ctx.setLineDash([]);
 	}
 	
-	// --- MODIFICATION START ---
 	// New function to draw the rectangular arena and populate its border segments.
 	drawRectangleArena(ctx, topLeft, width, height, color, segmentStore) {
 		const { width: goalWidth, depth: goalDepth, chamfer, dashLength, gapLength } = this.goalConfig;
@@ -674,5 +673,4 @@ class BoardView {
 			currentX += goalWidth + gapSize;
 		}
 	}
-	// --- MODIFICATION END ---
 }

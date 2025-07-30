@@ -2,24 +2,18 @@ class BoardSetup {
 	constructor(scene) {
 		this.scene = scene; // Store a reference to the main scene.
 		this.currentSides = 3;
-		// --- MODIFICATION START ---
 		this.currentBoardType = 'polygon'; // 'polygon' or 'rectangle'
 		this.hoveredType = '';
-		// --- MODIFICATION END ---
 		this.hoveredIndex = -1;
 		this.justClickedIndex = -1;
-		// --- MODIFICATION START ---
 		this.justClickedType = '';
-		// --- MODIFICATION END ---
 		
 		this.PIXEL_SCALE = GAME_CONFIG.Shared.PIXEL_SCALE;
 		this.SELECTOR_SCREEN_WIDTH = GAME_CONFIG.Shared.SELECTOR_SCREEN_WIDTH;
 		this.SELECTOR_PIXEL_WIDTH = GAME_CONFIG.BoardSetupScene.SELECTOR_PIXEL_WIDTH;
 		this.SLOT_PIXEL_HEIGHT = GAME_CONFIG.BoardSetupScene.SLOT_PIXEL_HEIGHT;
 		this.NUM_ICONS = GAME_CONFIG.BoardSetupScene.NUM_ICONS;
-		// --- MODIFICATION START ---
 		this.NUM_RECT_ICONS = GAME_CONFIG.BoardSetupScene.NUM_RECT_ICONS;
-		// --- MODIFICATION END ---
 		this.BALL_COLORS = GAME_CONFIG.Shared.BALL_COLORS;
 		
 		this.selectorHitArea = null;
@@ -56,7 +50,6 @@ class BoardSetup {
 		this.drawSelectorBar();
 	}
 	
-	// --- MODIFICATION START ---
 	// Updated to handle both polygon and rectangle icon sections.
 	getIconInfoFromPointer(pointer) {
 		const totalPolyIconsHeight = this.NUM_ICONS * this.SLOT_PIXEL_HEIGHT;
@@ -85,31 +78,25 @@ class BoardSetup {
 		
 		return { type: '', index: -1 }; // Not over any icon
 	}
-	// --- MODIFICATION END ---
 	
 	handlePointerMove(pointer) {
-		// --- MODIFICATION START ---
 		const { type, index } = this.getIconInfoFromPointer(pointer);
 		if (type !== this.hoveredType || index !== this.hoveredIndex) {
 			this.hoveredType = type;
 			this.hoveredIndex = index;
 			this.drawSelectorBar();
 		}
-		// --- MODIFICATION END ---
 	}
 	
 	handlePointerOut() {
-		// --- MODIFICATION START ---
 		if (this.hoveredIndex !== -1) {
 			this.hoveredIndex = -1;
 			this.hoveredType = '';
 			this.drawSelectorBar();
 		}
-		// --- MODIFICATION END ---
 	}
 	
 	handlePointerDown(pointer) {
-		// --- MODIFICATION START ---
 		const { type, index } = this.getIconInfoFromPointer(pointer);
 		if (index !== -1) {
 			this.currentBoardType = type;
@@ -131,17 +118,14 @@ class BoardSetup {
 				this.drawSelectorBar();
 			});
 		}
-		// --- MODIFICATION END ---
 	}
 	
 	emitBoardConfiguration() {
-		// --- MODIFICATION START ---
 		// Dynamically calculate the total max score based on the number of sides.
 		// Each side/goal contributes to the total possible score.
 		const newTotalMaxScore = this.currentSides * GAME_CONFIG.ScoreScenes.INDIVIDUAL_MAX_SCORE;
 		GAME_CONFIG.ScoreScenes.TOTAL_MAX_SCORE = newTotalMaxScore;
 		GAME_CONFIG.Shared.NUMBER_OF_SIDES = this.currentSides;
-		// --- MODIFICATION END ---
 		
 		const shuffledColors = Phaser.Utils.Array.Shuffle([...this.BALL_COLORS]);
 		const selectedColors = shuffledColors.slice(0, this.currentSides);
@@ -154,7 +138,6 @@ class BoardSetup {
 			});
 		}
 		
-		// --- MODIFICATION START ---
 		// Emit the board type along with other configuration details.
 		this.scene.game.events.emit('boardConfigurationChanged', {
 			sides: this.currentSides,
@@ -162,7 +145,6 @@ class BoardSetup {
 			goals: goals,
 			boardType: this.currentBoardType
 		});
-		// --- MODIFICATION END ---
 	}
 	
 	drawSelectorBar() {
@@ -170,7 +152,6 @@ class BoardSetup {
 		ctx.clearRect(0, 0, this.selectorTexture.width, this.selectorTexture.height);
 		const iconSize = 10;
 		
-		// --- MODIFICATION START ---
 		// Calculate starting position to center both icon groups.
 		const totalPolyIconsHeight = this.NUM_ICONS * this.SLOT_PIXEL_HEIGHT;
 		const totalRectIconsHeight = this.NUM_RECT_ICONS * this.SLOT_PIXEL_HEIGHT;
@@ -234,7 +215,6 @@ class BoardSetup {
 			}
 			ctx.fillText(numGoals.toString(), textX, textY);
 		}
-		// --- MODIFICATION END ---
 		
 		this.selectorTexture.update();
 	}

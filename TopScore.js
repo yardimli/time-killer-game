@@ -8,7 +8,7 @@ class TopScore {
 			goals: []
 		};
 		
-		// --- NEW: UI element references ---
+		// --- UI element references ---
 		this.totalProgressBar = null;
 		this.totalProgressContainer = null; // New container for progress rects.
 		this.totalProgressRectangles = []; // New array for progress rects.
@@ -24,7 +24,7 @@ class TopScore {
 		this.TOTAL_MAX_SCORE = scoreScenesConfig.TOTAL_MAX_SCORE;
 		this.SELECTOR_SCREEN_WIDTH = sharedConfig.SELECTOR_SCREEN_WIDTH;
 		
-		// --- NEW: Configuration for progress bar rectangles, similar to BottomScore ---
+		// --- Configuration for progress bar rectangles, similar to BottomScore ---
 		this.PROGRESS_RECT_WIDTH = 3; // Width of each progress rectangle.
 		this.PROGRESS_RECT_PADDING = 2; // Padding between rectangles.
 		this.PROGRESS_ANIMATION_DELAY = 50; // Delay between each rectangle animation in ms (faster for total).
@@ -65,11 +65,11 @@ class TopScore {
 	}
 	
 	/**
-	 * --- MODIFIED: This method now creates all UI elements from scratch. ---
+	 * This method now creates all UI elements from scratch.
 	 * It's called on initialization and resize to ensure correct layout.
 	 */
 	drawScoreboard() {
-		// --- NEW: Clean up any old UI elements before redrawing. ---
+		// --- Clean up any old UI elements before redrawing. ---
 		if (this.totalProgressBar) this.totalProgressBar.destroy();
 		if (this.totalProgressContainer) this.totalProgressContainer.destroy();
 		if (this.totalPercentageText) this.totalPercentageText.destroy();
@@ -91,7 +91,7 @@ class TopScore {
 		const barWidth = areaWidth * 0.9;
 		const barX = areaX + (areaWidth - barWidth) / 2;
 		
-		// --- NEW: Create UI elements similar to BottomScore. ---
+		// --- Create UI elements similar to BottomScore. ---
 		// The main bar background.
 		this.totalProgressBar = this.scene.add.rectangle(barX + barWidth / 2, barY, barWidth, barHeight, 0x111111)
 			.setStrokeStyle(2, 0xFFFFFF);
@@ -147,7 +147,7 @@ class TopScore {
 	}
 	
 	/**
-	 * --- NEW: This method handles score updates and animations. ---
+	 * --- This method handles score updates and animations. ---
 	 * It animates the percentage text and the progress bar rectangles.
 	 */
 	updateTotalScoreBar() {
@@ -216,7 +216,7 @@ class TopScore {
 	
 	handleResize(gameSize) {
 		this.drawScoreboard();
-		// --- NEW: After redrawing, update the bar to reflect the current score. ---
+		// --- After redrawing, update the bar to reflect the current score. ---
 		this.updateTotalScoreBar();
 	}
 }

@@ -18,7 +18,7 @@ class BottomScore {
 		this.INDIVIDUAL_MAX_SCORE = scoreScenesConfig.INDIVIDUAL_MAX_SCORE;
 		this.SELECTOR_SCREEN_WIDTH = sharedConfig.SELECTOR_SCREEN_WIDTH;
 		
-		// --- NEW: Centralized animation speed control ---
+		// --- Centralized animation speed control ---
 		// Change this single value to speed up or slow down the entire goal animation.
 		// Original total time was ~2000ms.
 		this.animationDuration = 2400; // Base duration in ms.
