@@ -62,6 +62,8 @@ class BallManager {
 			gameObject.originalFrictionAir = gameObject.body.frictionAir;
 			gameObject.setFrictionAir(0.1); // Increased air friction for better control
 			gameObject.isDragging = true;
+			// MODIFIED: Store a reference to the pointer for use in the update loop.
+			gameObject.draggingPointer = pointer;
 			
 			// Store the drag offset to maintain relative position
 			gameObject.dragOffsetX = gameObject.x - pointer.x;
@@ -81,51 +83,9 @@ class BallManager {
 			});
 		});
 		
-		this.scene.input.on('drag', (pointer, gameObject, dragX, dragY) => {
-			// Ensure we are only dragging balls.
-			if (!gameObject.body || gameObject.body.label !== 'ball') return;
-			
-			// Calculate the desired position
-			const targetX = dragX;
-			const targetY = dragY;
-			
-			// Calculate the difference between current and target position
-			const dx = targetX - gameObject.x;
-			const dy = targetY - gameObject.y;
-			
-			// Apply a spring-like force proportional to the distance
-			// This creates a smooth following effect
-			const forceX = dx * this.ballConfig.dragStiffness;
-			const forceY = dy * this.ballConfig.dragStiffness;
-			
-			// Set velocity directly for more control (instead of applying force)
-			gameObject.setVelocity(
-				forceX * 60, // Multiply by 60 to convert to per-second units
-				forceY * 60
-			);
-			
-			// Apply velocity damping to prevent oscillation
-			const currentVelocity = gameObject.body.velocity;
-			const speed = Math.sqrt(currentVelocity.x * currentVelocity.x + currentVelocity.y * currentVelocity.y);
-			
-			// Clamp the velocity to prevent excessive speeds
-			if (speed > this.ballConfig.maxDragVelocity) {
-				const scale = this.ballConfig.maxDragVelocity / speed;
-				gameObject.setVelocity(
-					currentVelocity.x * scale,
-					currentVelocity.y * scale
-				);
-			}
-			
-			// Apply additional damping
-			gameObject.setVelocity(
-				gameObject.body.velocity.x * this.ballConfig.dragDamping,
-				gameObject.body.velocity.y * this.ballConfig.dragDamping
-			);
-			
-			// Prevent rotation while dragging
-			gameObject.setAngularVelocity(0);
-		});
+		// REMOVED: The 'drag' event handler is no longer needed.
+		// Its logic has been moved to the 'update' method to ensure the force
+		// is applied continuously, even when the mouse is stationary.
 		
 		// --- MODIFIED: Refactored dragend logic for clarity and new events ---
 		this.scene.input.on('dragend', (pointer, gameObject) => {
@@ -134,6 +94,8 @@ class BallManager {
 			gameObject.isDragging = false;
 			
 			// Clean up drag properties and restore physics.
+			// MODIFIED: Clean up the stored pointer reference.
+			delete gameObject.draggingPointer;
 			delete gameObject.dragOffsetX;
 			delete gameObject.dragOffsetY;
 			if (gameObject.originalFrictionAir !== undefined) {
@@ -262,44 +224,77 @@ class BallManager {
 	}
 	
 	update(time, delta) {
-		// --- Push balls out of goal areas ---
 		const goalSensors = this.boardView.goalSensors;
 		const playAreaCenter = this.boardView.playArea.center;
 		
 		this.balls.getChildren().forEach(ball => {
-			// Don't apply any forces to a ball being dragged, static, or inactive.
-			if (!ball.body || !ball.active || ball.isStatic() || ball.isDragging) return;
-			
-			let isInGoal = false;
-			// Check if the ball has wandered into a goal area.
-			if (goalSensors && goalSensors.length > 0) {
-				const bodiesUnderPoint = this.scene.matter.query.point(goalSensors, { x: ball.x, y: ball.y });
-				if (bodiesUnderPoint.length > 0) {
-					isInGoal = true;
-				}
+			// Don't apply any forces to a static or inactive ball.
+			if (!ball.body || !ball.active || ball.isStatic()) {
+				return;
 			}
 			
-			if (isInGoal && playAreaCenter) {
-				// The ball is inside a goal sensor. Push it back towards the center of the arena.
-				const direction = new Phaser.Math.Vector2(playAreaCenter.x - ball.x, playAreaCenter.y - ball.y);
-				direction.normalize();
+			// MODIFIED: Handle dragging and non-dragging physics separately.
+			if (ball.isDragging && ball.draggingPointer) {
+				// --- This logic was moved from the 'drag' event handler ---
+				// It runs every frame to ensure the ball smoothly follows the cursor,
+				// preventing it from getting "stuck" when the pointer is stationary.
+				const pointer = ball.draggingPointer;
+				const targetX = pointer.x + ball.dragOffsetX;
+				const targetY = pointer.y + ball.dragOffsetY;
 				
-				// A small, constant force to gently nudge the ball.
-				// This value could be added to ballConfig for easier tuning.
-				const repelForce = 0.001;
-				direction.scale(repelForce);
+				const dx = targetX - ball.x;
+				const dy = targetY - ball.y;
 				
-				ball.applyForce(direction);
+				const forceX = dx * this.ballConfig.dragStiffness;
+				const forceY = dy * this.ballConfig.dragStiffness;
 				
+				ball.setVelocity(forceX * 60, forceY * 60);
+				
+				const currentVelocity = ball.body.velocity;
+				const speed = Math.sqrt(currentVelocity.x * currentVelocity.x + currentVelocity.y * currentVelocity.y);
+				
+				if (speed > this.ballConfig.maxDragVelocity) {
+					const scale = this.ballConfig.maxDragVelocity / speed;
+					ball.setVelocity(currentVelocity.x * scale, currentVelocity.y * scale);
+				}
+				
+				ball.setVelocity(
+					ball.body.velocity.x * this.ballConfig.dragDamping,
+					ball.body.velocity.y * this.ballConfig.dragDamping
+				);
+				
+				ball.setAngularVelocity(0);
 			} else {
-				// If not in a goal, apply the standard organic movement.
-				if (Math.random() > this.ballConfig.organicMoveThreshold) {
-					const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-					const force = new Phaser.Math.Vector2(
-						Math.cos(angle) * this.ballConfig.organicMoveForce,
-						Math.sin(angle) * this.ballConfig.organicMoveForce
-					);
-					ball.applyForce(force);
+				// --- This is the original update logic for non-dragged balls ---
+				let isInGoal = false;
+				// Check if the ball has wandered into a goal area.
+				if (goalSensors && goalSensors.length > 0) {
+					const bodiesUnderPoint = this.scene.matter.query.point(goalSensors, { x: ball.x, y: ball.y });
+					if (bodiesUnderPoint.length > 0) {
+						isInGoal = true;
+					}
+				}
+				
+				if (isInGoal && playAreaCenter) {
+					// The ball is inside a goal sensor. Push it back towards the center of the arena.
+					const direction = new Phaser.Math.Vector2(playAreaCenter.x - ball.x, playAreaCenter.y - ball.y);
+					direction.normalize();
+					
+					// A small, constant force to gently nudge the ball.
+					const repelForce = 0.001;
+					direction.scale(repelForce);
+					
+					ball.applyForce(direction);
+				} else {
+					// If not in a goal, apply the standard organic movement.
+					if (Math.random() > this.ballConfig.organicMoveThreshold) {
+						const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+						const force = new Phaser.Math.Vector2(
+							Math.cos(angle) * this.ballConfig.organicMoveForce,
+							Math.sin(angle) * this.ballConfig.organicMoveForce
+						);
+						ball.applyForce(force);
+					}
 				}
 			}
 		});
