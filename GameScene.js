@@ -105,7 +105,7 @@ class GameScene extends Phaser.Scene {
 		this.gameOverManager.init(); // --- NEW: Initialize the Game Over manager. ---
 		
 		// 2. Set up the resize listener.
-		this.scale.on('resize', this.handleResize, this);
+		// this.scale.on('resize', this.handleResize, this);
 		
 		// 3. Manually trigger the first resize to position all newly created elements correctly.
 		this.handleResize(this.scale.gameSize);

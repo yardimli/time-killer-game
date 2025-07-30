@@ -61,7 +61,7 @@ class GameOver {
 		// --- Create the "Game Over" Text ---
 		if (!this.gameOverText) {
 			this.gameOverText = this.scene.add.text(centerX, centerY, 'GAME OVER\nTHANKS FOR PLAYING', {
-				font: '48px monospace',
+				font: '68px monospace',
 				fill: '#FFFFFF',
 				align: 'center',
 				stroke: '#000000',
@@ -73,7 +73,7 @@ class GameOver {
 		// --- Start Timers for Animations ---
 		// Timer to change the text color every 2 seconds.
 		this.colorChangeTimer = this.scene.time.addEvent({
-			delay: 2000,
+			delay: 1000,
 			callback: this.changeTextColor,
 			callbackScope: this,
 			loop: true
@@ -125,12 +125,10 @@ class GameOver {
 		const x = Phaser.Math.Between(GAME_CONFIG.Shared.SELECTOR_SCREEN_WIDTH, gameSize.width - GAME_CONFIG.Shared.RIGHT_SCORE_SCREEN_WIDTH);
 		const y = Phaser.Math.Between(GAME_CONFIG.ScoreScenes.TOP_SCORE_SCREEN_HEIGHT, gameSize.height - GAME_CONFIG.ScoreScenes.BOTTOM_SCORE_SCREEN_HEIGHT);
 		
-		// Use a particle emitter for the firework effect.
-		const particles = this.scene.add.particles(this.particleTextureKey);
-		
-		particles.createEmitter({
-			x: x,
-			y: y,
+		// --- MODIFIED: Updated to Phaser 3.60+ particle emitter API ---
+		// The old `this.scene.add.particles(texture).createEmitter(config)` is deprecated.
+		// The new API creates the emitter directly and is more concise.
+		const emitter = this.scene.add.particles(x, y, this.particleTextureKey, {
 			// Use the game's ball colors for the particles.
 			color: GAME_CONFIG.Shared.BALL_COLORS.map(c => Phaser.Display.Color.HexStringToColor(c).color),
 			lifespan: 1000,
@@ -138,12 +136,14 @@ class GameOver {
 			scale: { start: 1, end: 0 },
 			gravityY: 200,
 			blendMode: 'ADD', // 'ADD' blend mode creates a bright, glowing effect.
-			quantity: 50,
 			// The emitter will fire once and then be removed automatically.
 			emitting: false
-		}).explode(50);
+		});
 		
-		// Set depth to be behind the text but in front of the game board.
-		particles.setDepth(1500);
+		// The emitter itself is a GameObject, so we can set its depth.
+		emitter.setDepth(1500);
+		
+		// Call explode directly on the emitter instance to fire the burst.
+		emitter.explode(50);
 	}
 }
