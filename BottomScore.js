@@ -17,6 +17,8 @@ class BottomScore {
 		this.BOTTOM_SCORE_SCREEN_HEIGHT = scoreScenesConfig.BOTTOM_SCORE_SCREEN_HEIGHT;
 		this.INDIVIDUAL_MAX_SCORE = scoreScenesConfig.INDIVIDUAL_MAX_SCORE;
 		this.SELECTOR_SCREEN_WIDTH = sharedConfig.SELECTOR_SCREEN_WIDTH;
+		// --- MODIFIED: Added reference to the new right score bar width ---
+		this.RIGHT_SCORE_SCREEN_WIDTH = sharedConfig.RIGHT_SCORE_SCREEN_WIDTH;
 		
 		// --- Centralized animation speed control ---
 		// Change this single value to speed up or slow down the entire goal animation.
@@ -98,7 +100,8 @@ class BottomScore {
 		
 		const areaX = this.SELECTOR_SCREEN_WIDTH;
 		const areaY = this.scene.scale.height - this.BOTTOM_SCORE_SCREEN_HEIGHT;
-		const areaWidth = this.scene.scale.width - areaX;
+		// --- MODIFIED: The available width is reduced by the new right score bar. ---
+		const areaWidth = this.scene.scale.width - areaX - this.RIGHT_SCORE_SCREEN_WIDTH;
 		const areaHeight = this.BOTTOM_SCORE_SCREEN_HEIGHT;
 		
 		const numScores = this.scoreConfig.goals.length;

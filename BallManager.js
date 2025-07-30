@@ -110,137 +110,133 @@ class BallManager {
 			gameObject.setAngularVelocity(0);
 		});
 		
+		// --- MODIFIED: Refactored dragend logic for clarity and new events ---
 		this.scene.input.on('dragend', (pointer, gameObject) => {
 			// Ensure we are only ending the drag for a ball.
 			if (!gameObject.body || gameObject.body.label !== 'ball' || !gameObject.active) return;
 			gameObject.isDragging = false;
 			
-			// Clean up drag properties
+			// Clean up drag properties and restore physics.
 			delete gameObject.dragOffsetX;
 			delete gameObject.dragOffsetY;
-			
-			// Restore the ball's original physics properties.
 			if (gameObject.originalFrictionAir !== undefined) {
 				gameObject.setFrictionAir(gameObject.originalFrictionAir);
 				delete gameObject.originalFrictionAir;
 			}
-			
-			// Stop the ball from moving when released
 			gameObject.setVelocity(0, 0);
 			gameObject.setAngularVelocity(0);
-			
 			this.scene.tweens.killTweensOf(gameObject);
 			
 			const playArea = this.boardView.playAreaPolygon;
 			const goalSensors = this.boardView.goalSensors;
-			
 			const dropX = gameObject.x;
 			const dropY = gameObject.y;
 			
-			let isValidDrop = false;
-			let isGoalDrop = false;
+			// Determine the type of drop based on location and color.
+			let dropType = 'invalid'; // Types: 'correct', 'incorrect_goal', 'valid_play_area', 'invalid'
 			let hitSensor = null;
 			
+			// 1. Check for a drop in a goal sensor area first.
 			if (goalSensors && goalSensors.length > 0) {
-				const point = {x: dropX, y: dropY};
+				const point = { x: dropX, y: dropY };
 				const bodiesUnderPoint = this.scene.matter.query.point(goalSensors, point);
 				
 				if (bodiesUnderPoint.length > 0) {
 					hitSensor = bodiesUnderPoint[0];
-					isValidDrop = true;
-					isGoalDrop = true;
+					if (gameObject.color === hitSensor.color) {
+						dropType = 'correct';
+					} else {
+						dropType = 'incorrect_goal';
+					}
 				}
 			}
 			
-			if (!isGoalDrop && playArea) {
+			// 2. If not in a goal, check if it's in the valid play area.
+			if (dropType === 'invalid' && playArea) {
 				if (Phaser.Geom.Polygon.Contains(playArea, pointer.x, pointer.y)) {
-					isValidDrop = true;
+					dropType = 'valid_play_area';
 				}
 			}
 			
-			let dropProcessed = false;
-			
-			if (isGoalDrop) {
-				const ball = gameObject;
-				
-				if (ball && ball.active) {
-					if (ball.color === hitSensor.color) {
-						dropProcessed = true;
-						this.scene.sound.play('drop_valid', {volume: 0.6});
-						
-						// For the scoring animation, we DO make it static.
-						ball.setStatic(true);
-						ball.setActive(false);
-						ball.setCollisionCategory(0);
-						
-						const targetInfo = this.scene.bottomScore.getBarAnimationInfo(ball.color);
-						
-						if (targetInfo) {
-							this.scene.game.events.emit('startGoalAnimation', {color: ball.color});
-							
-							this.scene.tweens.add({
-								targets: ball,
-								x: targetInfo.x,
-								y: targetInfo.y,
-								alpha: 0.3,
-								duration: 900,
-								ease: 'Cubic.easeIn',
-								delay: 300,
-								onComplete: () => {
-									this.scene.game.events.emit('scorePoint', {color: ball.color});
-									this.scene.game.events.emit('endGoalAnimation', {color: ball.color});
-									this.balls.remove(ball, true, true);
-									this.scene.time.delayedCall(this.ballConfig.respawnDelay, this.spawnBall, [], this);
-								}
-							});
-						}
-					}
-				}
-			} else if (isValidDrop) {
-				this.scene.sound.play('click_drop', {volume: 0.6});
-				dropProcessed = true;
-				// Animate the scale back to its normal size.
-				gameObject.setStatic(true);
-				this.scene.tweens.add({
-					targets: gameObject,
-					scale: this.ballConfig.finalSize,
-					duration: 250,
-					ease: 'Sine.easeOut',
-					onComplete: () => {
-						// After the animation, we can apply organic movement.
-						gameObject.setStatic(false);
-					}
-				});
-			}
-			
-			if (!dropProcessed) {
-				// --- Handle invalid drop by returning ball to center ---
-				this.scene.sound.play('drop_invalid', {volume: 0.6});
-				if (gameObject.active) {
-					const center = this.boardView.playArea.center;
+			// 3. Process the drop based on its determined type.
+			switch (dropType) {
+				case 'correct':
+					this.scene.game.events.emit('correctDrop'); // Fire event for accuracy tracking.
+					this.scene.sound.play('drop_valid', { volume: 0.6 });
 					
-					// Check if the center point is available
-					if (center) {
-						gameObject.setStatic(true); // Prevent physics during the tween
+					// Animate ball to the score bar.
+					gameObject.setStatic(true);
+					gameObject.setActive(false);
+					gameObject.setCollisionCategory(0);
+					
+					const targetInfo = this.scene.bottomScore.getBarAnimationInfo(gameObject.color);
+					
+					if (targetInfo) {
+						this.scene.game.events.emit('startGoalAnimation', { color: gameObject.color });
+						
 						this.scene.tweens.add({
 							targets: gameObject,
-							x: center.x,
-							y: center.y,
-							scale: this.ballConfig.finalSize, // Also restore scale
-							duration: 500, // A slightly longer duration to show travel
-							ease: 'Power2',
+							x: targetInfo.x,
+							y: targetInfo.y,
+							alpha: 0.3,
+							duration: 900,
+							ease: 'Cubic.easeIn',
+							delay: 300,
 							onComplete: () => {
-								if (gameObject.active) {
-									gameObject.setStatic(false); // Re-enable physics
-								}
+								this.scene.game.events.emit('scorePoint', { color: gameObject.color });
+								this.scene.game.events.emit('endGoalAnimation', { color: gameObject.color });
+								this.balls.remove(gameObject, true, true);
+								this.scene.time.delayedCall(this.ballConfig.respawnDelay, this.spawnBall, [], this);
 							}
 						});
-					} else {
-						console.warn('No center point available for returning the ball.');
-						// Fallback to the old behavior if center isn't found
-						this.fadeAndDestroyBall(gameObject);
 					}
-				}
+					break;
+				
+				case 'valid_play_area':
+					this.scene.sound.play('click_drop', { volume: 0.6 });
+					// Animate the scale back to its normal size.
+					gameObject.setStatic(true);
+					this.scene.tweens.add({
+						targets: gameObject,
+						scale: this.ballConfig.finalSize,
+						duration: 250,
+						ease: 'Sine.easeOut',
+						onComplete: () => {
+							gameObject.setStatic(false);
+						}
+					});
+					break;
+				
+				case 'incorrect_goal':
+				case 'invalid':
+					// Emit event for both incorrect goal drop and invalid area drop.
+					this.scene.game.events.emit('incorrectDrop'); // Fire event for accuracy tracking.
+					this.scene.sound.play('drop_invalid', { volume: 0.6 });
+					
+					// Return the ball to the center of the play area.
+					if (gameObject.active) {
+						const center = this.boardView.playArea.center;
+						if (center) {
+							gameObject.setStatic(true); // Prevent physics during the tween
+							this.scene.tweens.add({
+								targets: gameObject,
+								x: center.x,
+								y: center.y,
+								scale: this.ballConfig.finalSize, // Also restore scale
+								duration: 500,
+								ease: 'Power2',
+								onComplete: () => {
+									if (gameObject.active) {
+										gameObject.setStatic(false); // Re-enable physics
+									}
+								}
+							});
+						} else {
+							console.warn('No center point available for returning the ball.');
+							this.fadeAndDestroyBall(gameObject);
+						}
+					}
+					break;
 			}
 		});
 	}

@@ -24,6 +24,8 @@ class TopScore {
 		this.TOP_SCORE_SCREEN_HEIGHT = scoreScenesConfig.TOP_SCORE_SCREEN_HEIGHT;
 		this.TOTAL_MAX_SCORE = scoreScenesConfig.TOTAL_MAX_SCORE;
 		this.SELECTOR_SCREEN_WIDTH = sharedConfig.SELECTOR_SCREEN_WIDTH;
+		// --- MODIFIED: Added reference to the new right score bar width ---
+		this.RIGHT_SCORE_SCREEN_WIDTH = sharedConfig.RIGHT_SCORE_SCREEN_WIDTH;
 		
 		// --- Configuration for progress bar rectangles, similar to BottomScore ---
 		this.PROGRESS_RECT_WIDTH = 3; // Width of each progress rectangle.
@@ -85,7 +87,8 @@ class TopScore {
 		
 		const areaX = this.SELECTOR_SCREEN_WIDTH;
 		const areaY = 0;
-		const areaWidth = this.scene.scale.width - areaX;
+		// --- MODIFIED: The available width is reduced by the new right score bar. ---
+		const areaWidth = this.scene.scale.width - areaX - this.RIGHT_SCORE_SCREEN_WIDTH;
 		const areaHeight = this.TOP_SCORE_SCREEN_HEIGHT;
 		
 		const barHeight = areaHeight * 0.8;

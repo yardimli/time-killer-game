@@ -13,6 +13,8 @@ class BoardView {
 		
 		this.PIXEL_SCALE = sharedConfig.PIXEL_SCALE;
 		this.SELECTOR_SCREEN_WIDTH = sharedConfig.SELECTOR_SCREEN_WIDTH;
+		// --- MODIFIED: Added reference to the new right score bar width ---
+		this.RIGHT_SCORE_SCREEN_WIDTH = sharedConfig.RIGHT_SCORE_SCREEN_WIDTH;
 		this.backgroundColor = config.backgroundColor;
 		this.debugDraw = config.debugDraw;
 		this.glitchConfig = config.glitchConfig;
@@ -195,7 +197,7 @@ class BoardView {
 			const centerY = this.scene.cameras.main.height / 2;
 			
 			console.log(centerX, centerY, canvasWidth, canvasHeight);
-
+			
 			// Set the image's position to the center
 			if (canvasWidth > canvasHeight) {
 				this.boardImage.setPosition(centerX - (canvasWidth - canvasHeight - 40), centerY);
@@ -373,9 +375,10 @@ class BoardView {
 	handleResize(gameSize) {
 		this.calculateBoardPixelDimension();
 		
+		// --- MODIFIED: The view width is now reduced by the right score bar as well. ---
 		const viewX = this.SELECTOR_SCREEN_WIDTH;
 		const viewY = this.TOP_SCORE_SCREEN_HEIGHT;
-		const viewWidth = gameSize.width - this.SELECTOR_SCREEN_WIDTH;
+		const viewWidth = gameSize.width - this.SELECTOR_SCREEN_WIDTH - this.RIGHT_SCORE_SCREEN_WIDTH;
 		const viewHeight = gameSize.height - this.TOP_SCORE_SCREEN_HEIGHT - this.BOTTOM_SCORE_SCREEN_HEIGHT;
 		this.boardImage.setPosition(viewX + viewWidth / 2, viewY + viewHeight / 2);
 		
@@ -386,7 +389,8 @@ class BoardView {
 	}
 	
 	calculateBoardPixelDimension() {
-		const viewportWidth = this.scene.scale.width - this.SELECTOR_SCREEN_WIDTH;
+		// --- MODIFIED: The available viewport width is reduced by the new right score bar. ---
+		const viewportWidth = this.scene.scale.width - this.SELECTOR_SCREEN_WIDTH - this.RIGHT_SCORE_SCREEN_WIDTH;
 		const viewportHeight = this.scene.scale.height - this.TOP_SCORE_SCREEN_HEIGHT - this.BOTTOM_SCORE_SCREEN_HEIGHT;
 		
 		const maxDisplaySize = Math.min(viewportWidth, viewportHeight);

@@ -9,6 +9,7 @@ const GAME_CONFIG = {
 	Shared: {
 		PIXEL_SCALE: 2,
 		SELECTOR_SCREEN_WIDTH: 100,
+		RIGHT_SCORE_SCREEN_WIDTH: 60, // New: Width for the new right-side accuracy bar.
 		NUMBER_OF_SIDES: 3,
 		
 		// Master list of all possible ball colors

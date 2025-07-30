@@ -12,6 +12,7 @@ class GameScene extends Phaser.Scene {
 		this.ballManager = null;
 		this.topScore = null;
 		this.bottomScore = null;
+		this.rightScore = null; // New: Reference for the accuracy score manager.
 		this.customCursor = null;
 	}
 	
@@ -74,6 +75,7 @@ class GameScene extends Phaser.Scene {
 		this.boardSetup = new BoardSetup(this);
 		this.topScore = new TopScore(this);
 		this.bottomScore = new BottomScore(this);
+		this.rightScore = new RightScore(this); // New: Instantiate the accuracy score manager.
 		
 		// The initialization order is now critical.
 		
@@ -82,6 +84,7 @@ class GameScene extends Phaser.Scene {
 		this.ballManager.init();
 		this.topScore.init();
 		this.bottomScore.init();
+		this.rightScore.init(); // New: Initialize the accuracy score manager.
 		this.boardSetup.init(); // This now ONLY creates the UI elements.
 		
 		// 2. Set up the resize listener.
@@ -112,5 +115,6 @@ class GameScene extends Phaser.Scene {
 		this.boardSetup.handleResize(gameSize);
 		this.topScore.handleResize(gameSize);
 		this.bottomScore.handleResize(gameSize);
+		this.rightScore.handleResize(gameSize); // New: Inform the accuracy score manager of resize.
 	}
 }
