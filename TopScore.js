@@ -39,6 +39,17 @@ class TopScore {
 		// UI is now created dynamically in drawScoreboard, called by handleBoardChange.
 		this.scene.game.events.on('boardConfigurationChanged', this.handleBoardChange, this);
 		this.scene.game.events.on('scorePoint', this.addScore, this);
+		
+		// --- NEW: Listen for changes to the max score configuration. ---
+		this.scene.game.events.on('maxScoreChanged', this.handleMaxScoreChange, this);
+	}
+	
+	// --- NEW: Handler for when the max score is changed via keyboard input. ---
+	handleMaxScoreChange() {
+		// Update the internal max score value from the global config.
+		this.TOTAL_MAX_SCORE = GAME_CONFIG.ScoreScenes.TOTAL_MAX_SCORE;
+		// Update the progress bar to reflect the new maximum.
+		this.updateTotalScoreBar();
 	}
 	
 	handleBoardChange(config) {

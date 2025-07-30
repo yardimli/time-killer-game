@@ -45,6 +45,22 @@ class BottomScore {
 		
 		this.scene.game.events.on('startGoalAnimation', this.handleStartGoalAnimation, this);
 		this.scene.game.events.on('endGoalAnimation', this.handleEndGoalAnimation, this);
+		
+		// --- NEW: Listen for changes to the max score configuration. ---
+		this.scene.game.events.on('maxScoreChanged', this.handleMaxScoreChange, this);
+	}
+	
+	// --- NEW: Handler for when the max score is changed via keyboard input. ---
+	handleMaxScoreChange() {
+		// Update the internal max score value from the global config.
+		this.INDIVIDUAL_MAX_SCORE = GAME_CONFIG.ScoreScenes.INDIVIDUAL_MAX_SCORE;
+		
+		// Loop through all existing score bars and update their visuals.
+		for (const color in this.scores) {
+			if (this.scoreBarUIs[color]) {
+				this.updateScoreBar(color);
+			}
+		}
 	}
 	
 	handleBoardChange(config) {

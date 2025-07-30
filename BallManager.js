@@ -1,8 +1,10 @@
 // --- The Ball Manager ---
 class BallManager {
-	constructor(scene, boardView) {
+	// MODIFIED: Added bottomScore to the constructor to access score data.
+	constructor(scene, boardView, bottomScore) {
 		this.scene = scene; // Store a reference to the main scene.
 		this.boardView = boardView; // Store a reference to the board view manager.
+		this.bottomScore = bottomScore; // Store a reference to the bottom score manager.
 		
 		this.ballConfig = {...GAME_CONFIG.BallScene};
 		// Adjusted physics parameters for stable dragging
@@ -331,7 +333,7 @@ class BallManager {
 	}
 	
 	spawnBall() {
-		if (this.balls.countActive(true) >= this.ballConfig.maxBalls || this.ballConfig.colors.length === 0) {
+		if (this.balls.countActive(true) >= this.ballConfig.maxBalls) {
 			return;
 		}
 		
@@ -342,14 +344,27 @@ class BallManager {
 			return;
 		}
 		
+		// --- NEW: Filter colors to only spawn those that have not reached the max score. ---
+		const scores = this.bottomScore ? this.bottomScore.scores : {};
+		const maxScore = GAME_CONFIG.ScoreScenes.INDIVIDUAL_MAX_SCORE;
+		const availableColors = this.ballConfig.colors.filter(color => !scores[color] || scores[color] < maxScore);
+		
+		// If all colors have reached their max score, do not spawn any more balls.
+		if (availableColors.length === 0) {
+			console.log('All goals completed. No more balls will spawn.');
+			return;
+		}
+		
 		// Always use the center of the arena as the target drop point.
 		const targetPoint = this.boardView.playArea.center;
 		
 		const spawnX = targetPoint.x;
 		const spawnY = -50; // Start the ball above the screen.
-		const colorIndex = Phaser.Math.Between(0, this.ballConfig.colors.length - 1);
+		
+		// --- MODIFIED: Select a random color from the available (non-completed) list. ---
+		const ballColor = Phaser.Utils.Array.GetRandom(availableColors);
+		const colorIndex = this.ballConfig.colors.indexOf(ballColor);
 		const textureKey = `ball_${colorIndex}`;
-		const ballColor = this.ballConfig.colors[colorIndex];
 		
 		const ball = this.scene.matter.add.image(spawnX, spawnY, textureKey, null, {
 			shape: {type: 'circle', radius: this.ballConfig.pixelSize},

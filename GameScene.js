@@ -14,6 +14,10 @@ class GameScene extends Phaser.Scene {
 		this.bottomScore = null;
 		this.rightScore = null; // New: Reference for the accuracy score manager.
 		this.customCursor = null;
+		
+		// --- NEW: Properties for max score UI feedback ---
+		this.maxScoreText = null;
+		this.maxScoreTextTimer = null;
 	}
 	
 	preload() {
@@ -69,22 +73,32 @@ class GameScene extends Phaser.Scene {
 		// Set a very high depth to ensure the cursor is always drawn on top of everything else.
 		this.customCursor.setDepth(1000);
 		
-		// Instantiate all the game logic managers.
+		// --- MODIFIED: Instantiation order is critical for dependency injection. ---
+		// UI managers are created first, then logic managers that may depend on them.
 		this.boardView = new BoardView(this);
-		this.ballManager = new BallManager(this, this.boardView);
-		this.boardSetup = new BoardSetup(this);
 		this.topScore = new TopScore(this);
 		this.bottomScore = new BottomScore(this);
 		this.rightScore = new RightScore(this); // New: Instantiate the accuracy score manager.
+		this.ballManager = new BallManager(this, this.boardView, this.bottomScore); // Pass bottomScore reference.
+		this.boardSetup = new BoardSetup(this);
 		
-		// The initialization order is now critical.
+		// --- NEW: Create the text object for max score feedback. ---
+		this.maxScoreText = this.add.text(0, 0, '', {
+				font: '18px monospace',
+				fill: '#FFFF00',
+				backgroundColor: '#00000080',
+				padding: { x: 10, y: 5 }
+			})
+			.setOrigin(1, 1) // Position from bottom-right.
+			.setDepth(1001) // Ensure it's on top of everything.
+			.setVisible(false);
 		
 		// 1. Initialize all managers to create their respective game objects.
 		this.boardView.init();
-		this.ballManager.init();
 		this.topScore.init();
 		this.bottomScore.init();
 		this.rightScore.init(); // New: Initialize the accuracy score manager.
+		this.ballManager.init();
 		this.boardSetup.init(); // This now ONLY creates the UI elements.
 		
 		// 2. Set up the resize listener.
@@ -96,6 +110,40 @@ class GameScene extends Phaser.Scene {
 		// 4. After everything is created and positioned, emit the initial board configuration.
 		// This ensures all listeners (like the wall builder) have the correct positional data.
 		this.boardSetup.emitBoardConfiguration();
+		
+		// --- NEW: Add keyboard listeners for changing the max score. ---
+		this.input.keyboard.on('keydown-Q', () => this.changeMaxScore(1));
+		this.input.keyboard.on('keydown-A', () => this.changeMaxScore(-1));
+	}
+	
+	// --- NEW: Method to handle changing the max score and updating UI. ---
+	changeMaxScore(amount) {
+		const scoreConfig = GAME_CONFIG.ScoreScenes;
+		
+		// Change the individual max score, ensuring it doesn't go below 1.
+		scoreConfig.INDIVIDUAL_MAX_SCORE += amount;
+		scoreConfig.INDIVIDUAL_MAX_SCORE = Math.max(1, scoreConfig.INDIVIDUAL_MAX_SCORE);
+		
+		// Recalculate the total max score based on the new individual max and number of sides.
+		scoreConfig.TOTAL_MAX_SCORE = scoreConfig.INDIVIDUAL_MAX_SCORE * GAME_CONFIG.Shared.NUMBER_OF_SIDES;
+		
+		// Update the feedback text.
+		this.maxScoreText.setText(`${scoreConfig.INDIVIDUAL_MAX_SCORE}`);
+		this.maxScoreText.setVisible(true);
+		
+		// Remove any existing timer to reset its duration.
+		if (this.maxScoreTextTimer) {
+			this.maxScoreTextTimer.remove();
+		}
+		
+		// Set a timer to hide the text after 3 seconds.
+		this.maxScoreTextTimer = this.time.delayedCall(3000, () => {
+			this.maxScoreText.setVisible(false);
+		}, [], this);
+		
+		// Emit an event to notify other managers (TopScore, BottomScore) of the change.
+		this.game.events.emit('maxScoreChanged');
+		console.log(`Max score per goal changed to: ${scoreConfig.INDIVIDUAL_MAX_SCORE}`);
 	}
 	
 	update(time, delta) {
@@ -116,5 +164,10 @@ class GameScene extends Phaser.Scene {
 		this.topScore.handleResize(gameSize);
 		this.bottomScore.handleResize(gameSize);
 		this.rightScore.handleResize(gameSize); // New: Inform the accuracy score manager of resize.
+		
+		// --- NEW: Reposition the max score feedback text on resize. ---
+		if (this.maxScoreText) {
+			this.maxScoreText.setPosition(gameSize.width - 10, gameSize.height - 10);
+		}
 	}
 }
