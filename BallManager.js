@@ -19,6 +19,9 @@ class BallManager {
 		this.balls = null;
 		this.walls = null;
 		this.goals = [];
+		
+		// --- NEW: Flag to track if the game is over. ---
+		this.isGameOver = false;
 	}
 	
 	init() {
@@ -34,6 +37,18 @@ class BallManager {
 			this.createBallTextures();
 			this.createWallsFromPolygon();
 			this.resetBalls();
+		}, this);
+		
+		// --- NEW: Listen for the game over event to stop ball activity. ---
+		this.scene.game.events.on('gameOver', () => {
+			this.isGameOver = true;
+			// Fade out all existing balls and prevent them from respawning.
+			this.balls.getChildren().forEach(ball => {
+				if (ball.lifespanTimer) {
+					ball.lifespanTimer.remove();
+				}
+				this.fadeAndDestroyBall(ball);
+			});
 		}, this);
 		
 		// --- Improved Physics-based Dragging Logic ---
@@ -188,7 +203,10 @@ class BallManager {
 								this.scene.game.events.emit('scorePoint', { color: gameObject.color });
 								this.scene.game.events.emit('endGoalAnimation', { color: gameObject.color });
 								this.balls.remove(gameObject, true, true);
-								this.scene.time.delayedCall(this.ballConfig.respawnDelay, this.spawnBall, [], this);
+								// MODIFIED: Check game over state before respawning.
+								if (!this.isGameOver) {
+									this.scene.time.delayedCall(this.ballConfig.respawnDelay, this.spawnBall, [], this);
+								}
 							}
 						});
 					}
@@ -333,6 +351,10 @@ class BallManager {
 	}
 	
 	spawnBall() {
+		// --- MODIFIED: Add checks to prevent spawning if game is over. ---
+		if (this.isGameOver) {
+			return;
+		}
 		if (this.balls.countActive(true) >= this.ballConfig.maxBalls) {
 			return;
 		}
@@ -453,6 +475,9 @@ class BallManager {
 	}
 	
 	resetBalls() {
+		// --- NEW: Reset the game over state when the balls are reset. ---
+		this.isGameOver = false;
+		
 		this.balls.getChildren().forEach(ball => {
 			if (ball.lifespanTimer) ball.lifespanTimer.remove();
 			this.scene.tweens.killTweensOf(ball);
@@ -480,7 +505,10 @@ class BallManager {
 			ease: 'Power2',
 			onComplete: () => {
 				this.balls.remove(ball, true, true);
-				this.scene.time.delayedCall(this.ballConfig.respawnDelay, this.spawnBall, [], this);
+				// --- MODIFIED: Only respawn a ball if the game is not over. ---
+				if (!this.isGameOver) {
+					this.scene.time.delayedCall(this.ballConfig.respawnDelay, this.spawnBall, [], this);
+				}
 			}
 		});
 	}

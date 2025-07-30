@@ -13,6 +13,7 @@ class GameScene extends Phaser.Scene {
 		this.topScore = null;
 		this.bottomScore = null;
 		this.rightScore = null; // New: Reference for the accuracy score manager.
+		this.gameOverManager = null; // --- NEW: Reference for the Game Over manager. ---
 		this.customCursor = null;
 		
 		// --- NEW: Properties for max score UI feedback ---
@@ -81,6 +82,7 @@ class GameScene extends Phaser.Scene {
 		this.rightScore = new RightScore(this); // New: Instantiate the accuracy score manager.
 		this.ballManager = new BallManager(this, this.boardView, this.bottomScore); // Pass bottomScore reference.
 		this.boardSetup = new BoardSetup(this);
+		this.gameOverManager = new GameOver(this); // --- NEW: Instantiate the Game Over manager. ---
 		
 		// --- NEW: Create the text object for max score feedback. ---
 		this.maxScoreText = this.add.text(0, 0, '', {
@@ -100,6 +102,7 @@ class GameScene extends Phaser.Scene {
 		this.rightScore.init(); // New: Initialize the accuracy score manager.
 		this.ballManager.init();
 		this.boardSetup.init(); // This now ONLY creates the UI elements.
+		this.gameOverManager.init(); // --- NEW: Initialize the Game Over manager. ---
 		
 		// 2. Set up the resize listener.
 		this.scale.on('resize', this.handleResize, this);

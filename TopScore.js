@@ -18,6 +18,9 @@ class TopScore {
 		this.currentPercentage = 0; // New tracker for current percentage.
 		this.lastRectanglesShown = 0; // NEW: Track visible rectangles to calculate animation delay correctly.
 		
+		// --- NEW: Flag to ensure the 'gameOver' event is only fired once per game. ---
+		this.gameOverTriggered = false;
+		
 		const sharedConfig = GAME_CONFIG.Shared;
 		const scoreScenesConfig = GAME_CONFIG.ScoreScenes;
 		
@@ -62,6 +65,8 @@ class TopScore {
 		
 		this.TOTAL_MAX_SCORE = GAME_CONFIG.ScoreScenes.TOTAL_MAX_SCORE;
 		
+		// --- NEW: Reset the game over flag for the new game. ---
+		this.gameOverTriggered = false;
 		
 		// Re-create the UI for the new configuration or on initial load.
 		this.drawScoreboard();
@@ -237,6 +242,13 @@ class TopScore {
 		
 		// NEW: Update the count of visible rectangles for the next score update.
 		this.lastRectanglesShown = rectanglesToShow;
+		
+		// --- MODIFIED: Check for game over condition and emit event. ---
+		if (targetPercentage >= 100 && !this.gameOverTriggered) {
+			this.gameOverTriggered = true;
+			this.scene.game.events.emit('gameOver');
+			console.log('Game Over event emitted!');
+		}
 	}
 	
 	handleResize(gameSize) {
