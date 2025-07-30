@@ -17,6 +17,11 @@ class BoardSetup {
 		this.BALL_COLORS = GAME_CONFIG.Shared.BALL_COLORS;
 		
 		this.selectorHitArea = null;
+		
+		// --- NEW: Timer properties ---
+		this.timerText = null;
+		this.gameTimer = null;
+		this.elapsedSeconds = 0;
 	}
 	
 	init() {
@@ -34,6 +39,12 @@ class BoardSetup {
 		this.selectorImage.on('pointermove', this.handlePointerMove, this);
 		this.selectorImage.on('pointerout', this.handlePointerOut, this);
 		this.selectorImage.on('pointerdown', this.handlePointerDown, this);
+		
+		// --- NEW: Create the timer text object ---
+		const textStyle = { font: '24px monospace', fill: '#FFFFFF', align: 'center' };
+		this.timerText = this.scene.add.text(0, 0, '00:00', textStyle)
+			.setOrigin(0.5)
+			.setStroke('#000000', 4);
 	}
 	
 	handleResize(gameSize) {
@@ -48,6 +59,12 @@ class BoardSetup {
 		this.selectorHitArea.setSize(newWidth, newHeight);
 		this.selectorImage.setPosition(0, 0);
 		this.drawSelectorBar();
+		
+		// --- NEW: Position the timer text on resize ---
+		if (this.timerText) {
+			// Position it at the bottom of the selector bar area.
+			this.timerText.setPosition(this.SELECTOR_SCREEN_WIDTH / 2, gameSize.height - 30);
+		}
 	}
 	
 	// Updated to handle both polygon and rectangle icon sections.
@@ -121,6 +138,9 @@ class BoardSetup {
 	}
 	
 	emitBoardConfiguration() {
+		// --- MODIFIED: Start the timer when the board configuration is set/changed ---
+		this.startTimer();
+		
 		// Dynamically calculate the total max score based on the number of sides.
 		// Each side/goal contributes to the total possible score.
 		const newTotalMaxScore = this.currentSides * GAME_CONFIG.ScoreScenes.INDIVIDUAL_MAX_SCORE;
@@ -239,5 +259,46 @@ class BoardSetup {
 		}
 		ctx.closePath();
 		ctx.stroke();
+	}
+	
+	// --- NEW: Methods to manage the game timer ---
+	
+	/**
+	 * Starts or restarts the game timer.
+	 */
+	startTimer() {
+		// Stop any existing timer.
+		if (this.gameTimer) {
+			this.gameTimer.remove();
+		}
+		
+		this.elapsedSeconds = 0;
+		this.updateTimerText(); // Display '00:00' immediately.
+		
+		// Create a new looping timer event that fires every second.
+		this.gameTimer = this.scene.time.addEvent({
+			delay: 1000,
+			callback: () => {
+				this.elapsedSeconds++;
+				this.updateTimerText();
+			},
+			callbackScope: this,
+			loop: true
+		});
+	}
+	
+	/**
+	 * Updates the timer text display with the current elapsed time.
+	 */
+	updateTimerText() {
+		if (!this.timerText) return;
+		
+		const minutes = Math.floor(this.elapsedSeconds / 60);
+		const seconds = this.elapsedSeconds % 60;
+		
+		// Format the time to always have two digits (e.g., 01:05).
+		const formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+		
+		this.timerText.setText(formattedTime);
 	}
 }
