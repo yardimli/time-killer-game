@@ -19,6 +19,9 @@ class GameScene extends Phaser.Scene {
 		// --- NEW: Properties for max score UI feedback ---
 		this.maxScoreText = null;
 		this.maxScoreTextTimer = null;
+		
+		// --- NEW: Property for the initial hint text ---
+		this.hintText = null;
 	}
 	
 	preload() {
@@ -94,6 +97,40 @@ class GameScene extends Phaser.Scene {
 			.setOrigin(1, 1) // Position from bottom-right.
 			.setDepth(1001) // Ensure it's on top of everything.
 			.setVisible(false);
+		
+		// --- NEW: Create and display the initial hint text. ---
+		const gameSize = this.scale.gameSize;
+		this.hintText = this.add.text(
+				gameSize.width / 2,
+				gameSize.height / 2,
+				'USE Q and A keys to increase/decrease Goal Max Scores',
+				{
+					font: '24px monospace',
+					fill: '#FFFFFF',
+					align: 'center',
+					stroke: '#000000',
+					strokeThickness: 6,
+					backgroundColor: '#000000B0', // Semi-transparent background
+					padding: { x: 20, y: 10 }
+				}
+			)
+			.setOrigin(0.5)
+			.setDepth(2000); // High depth to appear on top.
+		
+		// Set a timer to hide the hint text after 3 seconds.
+		this.time.delayedCall(3000, () => {
+			if (this.hintText) {
+				// Use a tween for a smooth fade-out effect.
+				this.tweens.add({
+					targets: this.hintText,
+					alpha: 0,
+					duration: 500,
+					onComplete: () => {
+						this.hintText.setVisible(false);
+					}
+				});
+			}
+		}, [], this);
 		
 		// 1. Initialize all managers to create their respective game objects.
 		this.boardView.init();
@@ -171,6 +208,11 @@ class GameScene extends Phaser.Scene {
 		// --- NEW: Reposition the max score feedback text on resize. ---
 		if (this.maxScoreText) {
 			this.maxScoreText.setPosition(gameSize.width - 10, gameSize.height - 10);
+		}
+		
+		// --- NEW: Reposition the hint text on resize if it's visible. ---
+		if (this.hintText && this.hintText.visible) {
+			this.hintText.setPosition(gameSize.width / 2, gameSize.height / 2);
 		}
 	}
 }
