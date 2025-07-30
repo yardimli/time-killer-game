@@ -26,7 +26,7 @@ class BottomScore {
 		// Configuration for ball layout
 		this.BALLS_PER_ROW = 5;
 		this.MAX_ROWS = 4; // 20 balls total = 4 rows of 5
-		this.BALL_H_PADDING = 39 - (GAME_CONFIG.Shared.NUMBER_OF_SIDES * 3) ; // Horizontal padding between balls
+		this.BALL_H_PADDING = 39 - (GAME_CONFIG.Shared.NUMBER_OF_SIDES * 3); // Horizontal padding between balls
 		this.BALL_V_PADDING = 5; // Vertical padding between balls
 		
 		// Progress bar rectangle configuration
@@ -54,7 +54,7 @@ class BottomScore {
 		}
 		this.scoreBarUIs = {};
 		
-		this.BALL_H_PADDING = 39 - (GAME_CONFIG.Shared.NUMBER_OF_SIDES * 3) ; // Horizontal padding between balls
+		this.BALL_H_PADDING = 39 - (GAME_CONFIG.Shared.NUMBER_OF_SIDES * 3); // Horizontal padding between balls
 		
 		
 		// Reset internal score tracking.
@@ -234,7 +234,8 @@ class BottomScore {
 				totalBallHSpace: totalBallHSpace,
 				totalBallVSpace: totalBallVSpace,
 				currentPercentage: 0, // Track current displayed percentage
-				percentageTween: null // Store reference to percentage tween
+				percentageTween: null, // Store reference to percentage tween
+				lastRectanglesShown: 0 // NEW: Track visible rectangles for correct animation delay.
 			};
 			
 			this.updateScoreBar(color);
@@ -279,6 +280,9 @@ class BottomScore {
 			if (index < rectanglesToShow) {
 				// Check if this rectangle is already visible
 				if (rect.scaleX === 0) {
+					// MODIFIED: Calculate delay relative to the last visible rectangle.
+					const delayIndex = index - ui.lastRectanglesShown;
+					
 					// Animate this rectangle appearing
 					this.scene.tweens.add({
 						targets: rect,
@@ -286,7 +290,7 @@ class BottomScore {
 						alpha: 1,
 						duration: 200,
 						ease: 'Back.easeOut',
-						delay: index * this.PROGRESS_ANIMATION_DELAY
+						delay: Math.max(0, delayIndex) * this.PROGRESS_ANIMATION_DELAY
 					});
 				}
 			} else {
@@ -302,6 +306,9 @@ class BottomScore {
 				}
 			}
 		});
+		
+		// NEW: Update the count of visible rectangles for the next score update.
+		ui.lastRectanglesShown = rectanglesToShow;
 		
 		// Update balls in drawer
 		ui.ballHolder.removeAll(true);

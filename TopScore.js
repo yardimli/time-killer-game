@@ -16,6 +16,7 @@ class TopScore {
 		this.userNameText = null;
 		this.percentageTween = null; // New reference for text tween.
 		this.currentPercentage = 0; // New tracker for current percentage.
+		this.lastRectanglesShown = 0; // NEW: Track visible rectangles to calculate animation delay correctly.
 		
 		const sharedConfig = GAME_CONFIG.Shared;
 		const scoreScenesConfig = GAME_CONFIG.ScoreScenes;
@@ -76,6 +77,7 @@ class TopScore {
 		if (this.userNameText) this.userNameText.destroy();
 		this.totalProgressRectangles = [];
 		if (this.percentageTween) this.percentageTween.stop();
+		this.lastRectanglesShown = 0; // NEW: Reset the counter when redrawing the board.
 		
 		if (this.scoreConfig.goals.length === 0) {
 			return; // Don't draw if there are no goals.
@@ -190,13 +192,19 @@ class TopScore {
 			if (index < rectanglesToShow) {
 				// Animate this rectangle appearing if it's not already visible.
 				if (rect.scaleX === 0) {
+					// MODIFIED: Calculate delay relative to the last visible rectangle.
+					// This ensures that when a new point is scored, the animation for the
+					// new rectangle(s) starts immediately, instead of being delayed by
+					// all the previously visible rectangles.
+					const delayIndex = index - this.lastRectanglesShown;
+					
 					this.scene.tweens.add({
 						targets: rect,
 						scaleX: 1,
 						alpha: 1,
 						duration: 200,
 						ease: 'Back.easeOut',
-						delay: index * this.PROGRESS_ANIMATION_DELAY
+						delay: Math.max(0, delayIndex) * this.PROGRESS_ANIMATION_DELAY
 					});
 				}
 			} else {
@@ -212,11 +220,16 @@ class TopScore {
 				}
 			}
 		});
+		
+		// NEW: Update the count of visible rectangles for the next score update.
+		this.lastRectanglesShown = rectanglesToShow;
 	}
 	
 	handleResize(gameSize) {
 		this.drawScoreboard();
 		// --- After redrawing, update the bar to reflect the current score. ---
+		// This will now correctly animate from 0 to current score because
+		// drawScoreboard resets lastRectanglesShown to 0.
 		this.updateTotalScoreBar();
 	}
 }
